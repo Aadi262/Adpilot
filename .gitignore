@@ -5,3 +5,6 @@ dist
 build
 coverage
 .prisma
+google-cloud-sdk/
+node_modules/
+.env
