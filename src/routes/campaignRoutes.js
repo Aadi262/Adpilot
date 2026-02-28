@@ -1,7 +1,9 @@
 'use strict';
 
 const express = require('express');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requireRole } = require('../middleware/auth');
+const validateZod = require('../middleware/validateZod');
+const { createCampaignSchema, updateCampaignSchema } = require('../validators/schemas/campaignSchema');
 const {
   list,
   getOne,
@@ -16,12 +18,15 @@ const router = express.Router();
 
 router.use(authenticate);
 
+// Read — all authenticated roles
 router.get('/', list);
-router.post('/', create);
 router.get('/:id', getOne);
-router.patch('/:id', update);
-router.delete('/:id', remove);
-router.post('/:id/launch', launch);
-router.post('/:id/pause', pause);
+
+// Write — admin and manager only
+router.post('/',           requireRole('admin', 'manager'), validateZod(createCampaignSchema), create);
+router.patch('/:id',       requireRole('admin', 'manager'), validateZod(updateCampaignSchema), update);
+router.delete('/:id',      requireRole('admin', 'manager'), remove);
+router.post('/:id/launch', requireRole('admin', 'manager'), launch);
+router.post('/:id/pause',  requireRole('admin', 'manager'), pause);
 
 module.exports = router;

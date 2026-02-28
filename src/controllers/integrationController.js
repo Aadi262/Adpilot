@@ -1,6 +1,7 @@
 'use strict';
 
 const integrationService = require('../services/integrations/IntegrationService');
+const { queues }         = require('../queues');
 const { success, created } = require('../common/response');
 
 exports.listProviders = async (req, res, next) => {
@@ -18,9 +19,10 @@ exports.listProviders = async (req, res, next) => {
 
 exports.connect = async (req, res, next) => {
   try {
-    const { provider }   = req.params;
-    const { code, redirectUri } = req.body;
-    const integration = await integrationService.connect(req.user.teamId, provider, code, redirectUri);
+    const { provider } = req.params;
+    // accountId: Meta ad account ID (e.g. "1234567890") or Google customer ID
+    const { code, redirectUri, accountId } = req.body;
+    const integration = await integrationService.connect(req.user.teamId, provider, code, redirectUri, accountId);
     return created(res, { integration });
   } catch (err) { next(err); }
 };
@@ -34,9 +36,17 @@ exports.disconnect = async (req, res, next) => {
 
 exports.syncData = async (req, res, next) => {
   try {
-    const { provider }   = req.params;
-    const { dateFrom, dateTo, accountId } = req.body;
-    const data = await integrationService.syncData(req.user.teamId, provider, { dateFrom, dateTo, accountId });
-    return success(res, { provider, records: data.length, data });
+    const { provider } = req.params;
+    const { dateFrom, dateTo } = req.body;
+
+    // Enqueue the sync job — processor handles fetching + persisting to campaigns.performance
+    const job = await queues.integrationSync.add({
+      teamId:   req.user.teamId,
+      provider,
+      dateFrom: dateFrom || null,
+      dateTo:   dateTo   || null,
+    });
+
+    return success(res, { provider, jobId: job.id, message: 'Sync job queued' });
   } catch (err) { next(err); }
 };

@@ -220,12 +220,10 @@ export default function RulesPage() {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
   };
-
-  const { data: rules, isLoading, error } = useQuery({
+  const { data: rules = [], isLoading, error } = useQuery({
     queryKey: ['rules'],
     queryFn: () => api.get('/rules').then((r) => r.data.data),
   });
-
   const toggleMutation = useMutation({
     mutationFn: ({ id, isActive }) => api.patch(`/rules/${id}`, { isActive }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['rules'] }),

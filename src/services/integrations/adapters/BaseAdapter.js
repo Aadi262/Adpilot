@@ -42,10 +42,19 @@ class BaseAdapter {
 
   /**
    * Pause a campaign on the platform.
-   * @param {{ accessToken, externalCampaignId }} params
+   * @param {{ accessToken, externalCampaignId, accountId }} params
    */
   // eslint-disable-next-line no-unused-vars
   async pauseCampaign(params)          { throw new Error('pauseCampaign() not implemented'); }
+
+  /**
+   * Update a campaign's daily budget on the platform.
+   * @param {{ accessToken, externalCampaignId, accountId, dailyBudget, budgetResourceName? }} params
+   *   dailyBudget — new budget in the account's base currency unit (e.g. USD dollars)
+   *   budgetResourceName — Google Ads budget resource name (required for Google)
+   */
+  // eslint-disable-next-line no-unused-vars
+  async updateBudget(params)           { throw new Error('updateBudget() not implemented'); }
 
   /** Validate that stored credentials are still valid. */
   // eslint-disable-next-line no-unused-vars

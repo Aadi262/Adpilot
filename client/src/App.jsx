@@ -12,6 +12,7 @@ import IntegrationsPage from './pages/IntegrationsPage';
 import TeamPage from './pages/TeamPage';
 import NotFoundPage from './pages/NotFoundPage';
 import ComingSoon from './pages/ComingSoon';
+import AcceptInvitePage from './pages/AcceptInvitePage';
 
 function ProtectedRoute({ children }) {
   const token = useAuthStore((s) => s.token);
@@ -32,8 +33,10 @@ export default function App() {
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
       {/* Public routes */}
-      <Route path="/login"    element={<PublicRoute><LoginPage /></PublicRoute>} />
-      <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
+      <Route path="/login"          element={<PublicRoute><LoginPage /></PublicRoute>} />
+      <Route path="/register"       element={<PublicRoute><RegisterPage /></PublicRoute>} />
+      {/* Accept invite is always public — token in URL proves identity */}
+      <Route path="/accept-invite"  element={<AcceptInvitePage />} />
 
       {/* Protected routes inside AppLayout */}
       <Route

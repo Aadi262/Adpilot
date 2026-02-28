@@ -138,16 +138,39 @@ model Keyword {
 }
 
 model SeoAudit {
-  id               String   @id @default(uuid())
-  teamId           String   @map("team_id")
-  url              String
-  overallScore     Int      @default(0) @map("overall_score")
-  technicalIssues  Json     @default("[]") @db.JsonB
-  recommendations  Json     @default("[]") @db.JsonB
-  status           String   @default("pending")
-  createdAt        DateTime @default(now()) @map("created_at")
+  id            String   @id @default(uuid())
+  teamId        String   @map("team_id")
+  url           String
+  status        String   @default("pending")
+  engineVersion Int      @default(1) @map("engine_version")
+
+  // ── Shared (both v1 and v2) ──────────────────────────────────────────────
+  overallScore  Int?     @map("overall_score")
+  grade         String?
+
+  // ── v1 legacy columns — kept as-is; DB column names are camelCase (no @map) ──
+  // Written by SeoAuditService (legacy engine). Nullable so v2 records leave them null.
+  technicalIssues Json?  @db.JsonB
+  recommendations Json?  @db.JsonB
+
+  // ── v2 dedicated columns (AuditOrchestrator, engineVersion=2) ────────────
+  // Full Issue[] from TechnicalAnalyzer, severity-sorted
+  issues          Json?  @db.JsonB
+  // PerformanceEngine result: { score, metrics, pagesAnalyzed, pageResults, fallback }
+  performanceData Json?  @db.JsonB @map("performance_data")
+  // ScoringEngine output: { categories, issueCount, deductionAudit }
+  categoryScores  Json?  @db.JsonB @map("category_scores")
+  // Crawl metadata: { crawlStats, brokenLinks, redirectChains } — NOT full pages[]
+  rawCrawlData    Json?  @db.JsonB @map("raw_crawl_data")
+  // LLM executive summary (null until SeoSummaryService is implemented)
+  summary         String?
+
+  createdAt     DateTime @default(now()) @map("created_at")
 
   team Team @relation(fields: [teamId], references: [id])
+
+  @@index([teamId, status])
+  @@index([teamId, createdAt])
   @@map("seo_audits")
 }
 
@@ -204,6 +227,7 @@ model Integration {
   id             String    @id @default(uuid())
   teamId         String    @map("team_id")
   provider       String
+  accountId      String?   @map("account_id")   // Meta ad account ID or Google customer ID
   accessToken    String?   @map("access_token")
   refreshToken   String?   @map("refresh_token")
   tokenExpiresAt DateTime? @map("token_expires_at")

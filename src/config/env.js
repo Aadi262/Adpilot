@@ -12,6 +12,9 @@ const schema = Joi.object({
   JWT_EXPIRES_IN:       Joi.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN: Joi.string().default('7d'),
   ENCRYPTION_KEY:       Joi.string().length(64).default('0'.repeat(64)), // 32-byte hex
+  SENTRY_DSN:           Joi.string().uri().optional().allow(''),
+  RESEND_API_KEY:       Joi.string().optional().allow(''),
+  RESEND_FROM_EMAIL:    Joi.string().email().default('noreply@adpilot.io'),
   OPENAI_API_KEY:       Joi.string().optional().allow(''),
   SERP_API_KEY:         Joi.string().optional().allow(''),
   META_APP_ID:          Joi.string().optional().allow(''),

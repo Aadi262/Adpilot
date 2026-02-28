@@ -1,9 +1,13 @@
 'use strict';
 
+// Sentry must be initialized before other requires so it can instrument them.
+require('./config/sentry');
+
 const path    = require('path');
 const express = require('express');
 const helmet  = require('helmet');
 const cors    = require('cors');
+const Sentry  = require('@sentry/node');
 
 // Infrastructure
 const correlationId  = require('./middleware/correlationId');
@@ -11,6 +15,9 @@ const sanitize       = require('./middleware/sanitize');
 const { apiLimiter } = require('./middleware/rateLimiter');
 const { errorHandler } = require('./middleware/errorHandler');
 const logger         = require('./config/logger');
+const prisma         = require('./config/prisma');
+const { getRedis }   = require('./config/redis');
+const { queues }     = require('./queues');
 
 // Routes
 const authRoutes        = require('./routes/authRoutes');
@@ -24,9 +31,9 @@ const teamRoutes        = require('./routes/teamRoutes');
 
 const app = express();
 
-// ── Security ─────────────────────────────────────────────────────────────────
+// ── Security ──────────────────────────────────────────────────────────────────
 app.use(helmet({
-  contentSecurityPolicy: false, // relaxed for API; tighten in prod
+  contentSecurityPolicy:     false,
   crossOriginEmbedderPolicy: false,
 }));
 app.use(cors({
@@ -37,7 +44,7 @@ app.use(cors({
 }));
 
 // ── Request hygiene ───────────────────────────────────────────────────────────
-app.use(correlationId);
+app.use(correlationId);        // also starts ALS context with traceId
 app.use(express.json({ limit: '1mb' }));
 app.use(sanitize);
 
@@ -48,12 +55,12 @@ app.use('/api', apiLimiter);
 app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
+    // traceId and teamId are already in ALS — logger injects them automatically
     logger.info('HTTP', {
       method: req.method,
-      url: req.originalUrl,
+      url:    req.originalUrl,
       status: res.statusCode,
-      ms: Date.now() - start,
-      correlationId: req.correlationId,
+      ms:     Date.now() - start,
     });
   });
   next();
@@ -61,16 +68,74 @@ app.use((req, res, next) => {
 
 // ── Static pages ──────────────────────────────────────────────────────────────
 const ROOT = path.join(__dirname, '..');
-app.get('/',          (req, res) => res.sendFile(path.join(ROOT, 'index.html')));
-app.get('/login.html',(req, res) => res.sendFile(path.join(ROOT, 'login.html')));
+app.get('/',           (req, res) => res.sendFile(path.join(ROOT, 'index.html')));
+app.get('/login.html', (req, res) => res.sendFile(path.join(ROOT, 'login.html')));
 
-// ── Health ────────────────────────────────────────────────────────────────────
-app.get('/health', (req, res) => {
-  res.status(200).json({
-    success: true,
-    data: { status: 'ok', timestamp: new Date().toISOString() },
+// ── Health endpoint ───────────────────────────────────────────────────────────
+app.get('/health', async (req, res) => {
+  const checks  = {};
+  let   overall = 'healthy';
+
+  // ── Database ────────────────────────────────────────────────────────────
+  const dbStart = Date.now();
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    checks.database = { status: 'ok', latencyMs: Date.now() - dbStart };
+  } catch (err) {
+    checks.database = { status: 'fail', error: err.message };
+    overall = 'unhealthy';
+  }
+
+  // ── Redis ────────────────────────────────────────────────────────────────
+  const redisStart = Date.now();
+  try {
+    const redis = getRedis();
+    await redis.ping();
+    checks.redis = { status: 'ok', latencyMs: Date.now() - redisStart };
+  } catch (err) {
+    checks.redis = { status: 'fail', error: err.message };
+    if (overall === 'healthy') overall = 'degraded';
+  }
+
+  // ── Bull queues ──────────────────────────────────────────────────────────
+  const queueChecks = {};
+  let   queueFailed = false;
+
+  await Promise.allSettled(
+    Object.entries(queues).map(async ([name, queue]) => {
+      try {
+        const [waiting, active, failed, delayed] = await Promise.all([
+          queue.getWaitingCount(),
+          queue.getActiveCount(),
+          queue.getFailedCount(),
+          queue.getDelayedCount(),
+        ]);
+        queueChecks[name] = { status: 'ok', waiting, active, failed, delayed };
+        // Flag if a queue has accumulated significant failures
+        if (failed > 50) queueFailed = true;
+      } catch (err) {
+        queueChecks[name] = { status: 'fail', error: err.message };
+        queueFailed = true;
+      }
+    })
+  );
+
+  checks.queues = queueChecks;
+  if (queueFailed && overall === 'healthy') overall = 'degraded';
+
+  // ── Response ─────────────────────────────────────────────────────────────
+  const statusCode = overall === 'unhealthy' ? 503 : 200;
+
+  return res.status(statusCode).json({
+    success: overall !== 'unhealthy',
+    data: {
+      status:    overall,
+      timestamp: new Date().toISOString(),
+      uptime:    Math.floor(process.uptime()),
+      checks,
+    },
     error: null,
-    meta: {},
+    meta:  {},
   });
 });
 
@@ -88,11 +153,15 @@ app.use('/api/v1/team',         teamRoutes);
 app.use((req, res) => {
   res.status(404).json({
     success: false,
-    data: null,
-    error: { message: `${req.method} ${req.originalUrl} not found` },
-    meta: { timestamp: new Date().toISOString() },
+    data:    null,
+    error:   { message: `${req.method} ${req.originalUrl} not found` },
+    meta:    { timestamp: new Date().toISOString() },
   });
 });
+
+// ── Sentry error handler (must come before custom error handler) ──────────────
+// Captures exceptions that weren't already captured by the error handler itself.
+Sentry.setupExpressErrorHandler(app);
 
 // ── Global error handler ──────────────────────────────────────────────────────
 app.use(errorHandler);

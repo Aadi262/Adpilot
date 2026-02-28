@@ -1,8 +1,9 @@
 'use strict';
 
-const jwt = require('jsonwebtoken');
+const jwt    = require('jsonwebtoken');
 const config = require('../config');
 const AppError = require('../common/AppError');
+const als    = require('../config/als');
 
 /** Verify Bearer token, attach req.user = { userId, teamId, role } */
 function authenticate(req, res, next) {
@@ -13,6 +14,12 @@ function authenticate(req, res, next) {
     const token = header.slice(7);
     const payload = jwt.verify(token, config.jwt.secret);
     req.user = { userId: payload.userId, teamId: payload.teamId, role: payload.role };
+
+    // Stamp teamId onto the current ALS store so all subsequent logger calls
+    // within this request automatically include teamId without manual threading.
+    const store = als.getStore();
+    if (store) store.teamId = payload.teamId;
+
     next();
   } catch (err) {
     if (err.name === 'JsonWebTokenError')  return next(AppError.unauthorized('Invalid token'));

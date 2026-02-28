@@ -1,103 +1,52 @@
 'use strict';
 
-const express = require('express');
+const express    = require('express');
 const { authenticate } = require('../middleware/auth');
-const prisma = require('../config/prisma');
+const aggregator = require('../services/analytics/AnalyticsAggregator');
+const { success } = require('../common/response');
 
 const router = express.Router();
 
 router.use(authenticate);
 
+/**
+ * GET /api/v1/analytics/overview
+ * Returns team-level KPIs: totalCampaigns, activeCampaigns, totalAdSpend,
+ * totalRevenue, totalClicks, totalImpressions, totalConversions,
+ * avgROAS, overallCPA, overallCTR, topCampaign.
+ * Cached in Redis for 5 minutes.
+ */
 router.get('/overview', async (req, res, next) => {
   try {
-    const { teamId } = req.user;
-
-    const [allCampaigns, activeCampaigns] = await Promise.all([
-      prisma.campaign.findMany({
-        where: { teamId },
-        select: {
-          id: true,
-          name: true,
-          status: true,
-          budget: true,
-          performance: true,
-        },
-      }),
-      prisma.campaign.count({ where: { teamId, status: 'active' } }),
-    ]);
-
-    const totalCampaigns = allCampaigns.length;
-    const totalAdSpend = allCampaigns.reduce((sum, c) => {
-      const perf = c.performance || {};
-      return sum + (Number(perf.spend) || 0);
-    }, 0);
-
-    const roasValues = allCampaigns
-      .map((c) => Number((c.performance || {}).roas))
-      .filter((v) => v > 0);
-    const avgROAS = roasValues.length
-      ? (roasValues.reduce((a, b) => a + b, 0) / roasValues.length).toFixed(2)
-      : 0;
-
-    const topCampaign = allCampaigns.reduce((best, c) => {
-      const spend = Number((c.performance || {}).spend) || 0;
-      const bestSpend = Number(((best || {}).performance || {}).spend) || 0;
-      return spend > bestSpend ? c : best;
-    }, null);
-
-    return res.status(200).json({
-      success: true,
-      data: {
-        totalCampaigns,
-        activeCampaigns,
-        totalAdSpend: Number(totalAdSpend.toFixed(2)),
-        avgROAS: Number(avgROAS),
-        topCampaign: topCampaign
-          ? { id: topCampaign.id, name: topCampaign.name }
-          : null,
-      },
-    });
+    const data = await aggregator.getOverview(req.user.teamId);
+    return success(res, data);
   } catch (err) {
     next(err);
   }
 });
 
+/**
+ * GET /api/v1/analytics/campaigns
+ * Returns per-campaign performance with derived metrics:
+ * roas, cpa, ctr, spend, revenue, clicks, impressions, conversions.
+ */
 router.get('/campaigns', async (req, res, next) => {
   try {
-    const { teamId } = req.user;
+    const campaigns = await aggregator.getCampaignPerformance(req.user.teamId);
+    return success(res, { campaigns });
+  } catch (err) {
+    next(err);
+  }
+});
 
-    const campaigns = await prisma.campaign.findMany({
-      where: { teamId },
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        name: true,
-        platform: true,
-        status: true,
-        budget: true,
-        budgetType: true,
-        performance: true,
-        createdAt: true,
-        _count: { select: { ads: true } },
-      },
-    });
-
-    const data = campaigns.map((c) => ({
-      id: c.id,
-      name: c.name,
-      platform: c.platform,
-      status: c.status,
-      budget: Number(c.budget),
-      budgetType: c.budgetType,
-      adsCount: c._count.ads,
-      spend: Number((c.performance || {}).spend) || 0,
-      roas: Number((c.performance || {}).roas) || 0,
-      clicks: Number((c.performance || {}).clicks) || 0,
-      impressions: Number((c.performance || {}).impressions) || 0,
-      createdAt: c.createdAt,
-    }));
-
-    return res.status(200).json({ success: true, data: { campaigns: data } });
+/**
+ * GET /api/v1/analytics/anomalies
+ * Z-score anomaly detection across active campaigns.
+ */
+router.get('/anomalies', async (req, res, next) => {
+  try {
+    const anomalies = await aggregator.detectAnomalies(req.user.teamId);
+    return success(res, { anomalies });
   } catch (err) {
     next(err);
   }

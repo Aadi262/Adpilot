@@ -16,13 +16,13 @@ import useAuthStore from '../store/authStore';
 
 // ─── Role badge ───────────────────────────────────────────────────────────────
 const ROLE_STYLES = {
-  admin:  'bg-accent-purple/10 text-accent-purple border-accent-purple/20',
-  member: 'bg-accent-blue/10 text-accent-blue border-accent-blue/20',
-  viewer: 'bg-text-secondary/10 text-text-secondary border-text-secondary/20',
+  admin:   'bg-accent-purple/10 text-accent-purple border-accent-purple/20',
+  manager: 'bg-accent-green/10 text-accent-green border-accent-green/20',
+  member:  'bg-accent-blue/10 text-accent-blue border-accent-blue/20',
 };
 
 function RoleBadge({ role }) {
-  const cls = ROLE_STYLES[role?.toLowerCase()] || ROLE_STYLES.viewer;
+  const cls = ROLE_STYLES[role?.toLowerCase()] || ROLE_STYLES.member;
   return (
     <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border ${cls}`}>
       {role?.toLowerCase() === 'admin' && <Crown className="w-2.5 h-2.5" />}
@@ -133,9 +133,9 @@ function InviteModal({ onClose }) {
               value={form.role}
               onChange={(e) => setForm({ ...form, role: e.target.value })}
             >
-              <option value="admin"  className="bg-bg-secondary">Admin</option>
-              <option value="member" className="bg-bg-secondary">Member</option>
-              <option value="viewer" className="bg-bg-secondary">Viewer</option>
+              <option value="admin"   className="bg-bg-secondary">Admin</option>
+              <option value="manager" className="bg-bg-secondary">Manager</option>
+              <option value="member"  className="bg-bg-secondary">Member</option>
             </select>
           </div>
 
@@ -168,9 +168,9 @@ function RoleDropdown({ memberId, currentRole }) {
       disabled={mutation.isPending}
       className="bg-transparent text-xs font-medium border border-border rounded-lg px-2 py-1 text-text-primary focus:outline-none focus:border-accent-blue disabled:opacity-50 transition-colors"
     >
-      <option value="admin"  className="bg-bg-secondary">Admin</option>
-      <option value="member" className="bg-bg-secondary">Member</option>
-      <option value="viewer" className="bg-bg-secondary">Viewer</option>
+      <option value="admin"   className="bg-bg-secondary">Admin</option>
+      <option value="manager" className="bg-bg-secondary">Manager</option>
+      <option value="member"  className="bg-bg-secondary">Member</option>
     </select>
   );
 }
@@ -187,22 +187,22 @@ export default function TeamPage() {
     setTimeout(() => setToast(null), 4000);
   };
 
-  // Team info
+  // Team info — backend: success(res, { team: {...} }) → data.team
   const { data: teamInfo, isLoading: loadingTeam } = useQuery({
     queryKey: ['team'],
-    queryFn: () => api.get('/team').then((r) => r.data.data),
+    queryFn: () => api.get('/team').then((r) => r.data.data.team),
   });
 
-  // Members
+  // Members — backend: success(res, { members: [...] }) → data.members
   const { data: members, isLoading: loadingMembers } = useQuery({
     queryKey: ['team', 'members'],
-    queryFn: () => api.get('/team/members').then((r) => r.data.data),
+    queryFn: () => api.get('/team/members').then((r) => r.data.data.members ?? []),
   });
 
-  // Pending invites
+  // Pending invites — backend: success(res, { invites: [...] }) → data.invites
   const { data: invites, isLoading: loadingInvites } = useQuery({
     queryKey: ['team', 'invites'],
-    queryFn: () => api.get('/team/invites').then((r) => r.data.data),
+    queryFn: () => api.get('/team/invites').then((r) => r.data.data.invites ?? []),
   });
 
   const removeMemberMutation = useMutation({

@@ -5,6 +5,8 @@ const bcrypt           = require('bcrypt');
 const prisma           = require('../../config/prisma');
 const AppError         = require('../../common/AppError');
 const logger           = require('../../config/logger');
+const EmailService     = require('../email/EmailService');
+const NotificationService = require('../notifications/NotificationService');
 
 const INVITE_TTL_HOURS = 48;
 const SALT_ROUNDS      = 12;
@@ -39,6 +41,26 @@ class InviteService {
     const inviteUrl = `${process.env.INVITE_BASE_URL || 'http://localhost:5173'}/accept-invite?token=${token}`;
 
     logger.info('Invite created', { teamId, email, role });
+
+    // Fetch team name for the email template
+    const team = await prisma.team.findUnique({ where: { id: teamId }, select: { name: true } });
+
+    // Send invite email — fire-and-forget (never block invite creation on delivery)
+    EmailService.sendInvite({
+      to:          email,
+      inviterName: 'Your team admin',   // caller can override by extending params if needed
+      teamName:    team?.name || 'your team',
+      role,
+      inviteUrl,
+    }).catch((err) => logger.error('Invite email delivery failed', { email, error: err.message }));
+
+    // In-app notification for admins/managers of the team
+    NotificationService.create({
+      teamId,
+      type:    'invite_sent',
+      channel: 'in_app',
+      message: `Invite sent to ${email} for role: ${role}`,
+    }).catch((err) => logger.error('Invite notification failed', { teamId, error: err.message }));
 
     return { invite, inviteUrl };
   }

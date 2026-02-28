@@ -286,14 +286,14 @@ export default function IntegrationsPage() {
     queryFn: () => api.get('/integrations').then((r) => r.data.data),
   });
 
-  // Build a map: provider id -> integration object
+  // Build a map: provider id -> { connected, ...integrationDetail }
+  // Backend returns: { providers: [{provider, connected}], integrations: [...connected records] }
   const integrationMap = {};
-  if (Array.isArray(integrations)) {
-    integrations.forEach((itg) => {
-      integrationMap[itg.provider || itg.id] = itg;
+  if (integrations?.providers) {
+    integrations.providers.forEach(({ provider, connected }) => {
+      const detail = integrations.integrations?.find((i) => i.provider === provider);
+      integrationMap[provider] = { connected, ...(detail || {}) };
     });
-  } else if (integrations && typeof integrations === 'object') {
-    Object.assign(integrationMap, integrations);
   }
 
   return (

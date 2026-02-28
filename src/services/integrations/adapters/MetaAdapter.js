@@ -90,11 +90,37 @@ class MetaAdapter extends BaseAdapter {
   }
 
   async pauseCampaign({ accessToken, externalCampaignId }) {
-    await axios.post(`${GRAPH_URL}/${externalCampaignId}`, {
-      access_token: accessToken,
-      status: 'PAUSED',
-    });
-    return { success: true };
+    try {
+      await axios.post(`${GRAPH_URL}/${externalCampaignId}`, {
+        access_token: accessToken,
+        status: 'PAUSED',
+      });
+      logger.info('Meta campaign paused', { externalCampaignId });
+      return { success: true };
+    } catch (err) {
+      throw AppError.internal(`Meta pauseCampaign failed: ${err.response?.data?.error?.message || err.message}`);
+    }
+  }
+
+  /**
+   * Update a campaign's daily budget on Meta (Campaign Budget Optimization assumed).
+   * Meta budget fields are in the account currency's smallest unit (cents for USD).
+   * @param {{ accessToken, externalCampaignId, dailyBudget }} params
+   *   dailyBudget — new budget in dollars; converted to cents internally
+   */
+  async updateBudget({ accessToken, externalCampaignId, dailyBudget }) {
+    // Meta API accepts daily_budget as string of smallest currency unit (cents for USD)
+    const budgetCents = Math.round(dailyBudget * 100);
+    try {
+      await axios.post(`${GRAPH_URL}/${externalCampaignId}`, {
+        access_token:  accessToken,
+        daily_budget:  String(budgetCents),
+      });
+      logger.info('Meta campaign budget updated', { externalCampaignId, dailyBudget, budgetCents });
+      return { success: true };
+    } catch (err) {
+      throw AppError.internal(`Meta updateBudget failed: ${err.response?.data?.error?.message || err.message}`);
+    }
   }
 
   async validateCredentials(accessToken) {

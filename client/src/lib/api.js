@@ -15,9 +15,24 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// On 401, logout and redirect to login
+// On 401, logout and redirect to login.
+// Also normalizes paginated list responses so callers always get r.data.data as the
+// items array — instead of r.data.data.items — for endpoints that use the paginated()
+// helper.  Non-paginated responses (single objects, named-key arrays) are untouched.
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const body = response.data;
+    // paginated() helper produces: { data: { items: [...] }, meta: { pagination: {...} } }
+    // Promote items[] to the data level and expose pagination at response.data.pagination.
+    if (body?.data !== null && typeof body?.data === 'object' && 'items' in body.data) {
+      response.data = {
+        ...body,
+        data:       body.data.items,
+        pagination: body.meta?.pagination ?? null,
+      };
+    }
+    return response;
+  },
   (error) => {
     if (error.response?.status === 401) {
       useAuthStore.getState().logout();

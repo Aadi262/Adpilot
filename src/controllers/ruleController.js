@@ -51,7 +51,18 @@ exports.updateRule = async (req, res, next) => {
     const rule = await prisma.rule.findFirst({ where: { id: req.params.id, teamId: req.user.teamId } });
     if (!rule) throw AppError.notFound('Rule');
 
-    const updated = await prisma.rule.update({ where: { id: req.params.id }, data: req.body });
+    // Whitelist mutable fields — never let req.body reach Prisma directly
+    const { triggerType, triggerValue, action, actionValue, isActive } = req.body;
+    const data = {};
+    if (triggerType  !== undefined) data.triggerType  = triggerType;
+    if (triggerValue !== undefined) data.triggerValue = triggerValue;
+    if (action       !== undefined) data.action       = action;
+    if (actionValue  !== undefined) data.actionValue  = actionValue;
+    if (isActive     !== undefined) data.isActive     = isActive;
+
+    if (!Object.keys(data).length) throw AppError.badRequest('No valid fields to update');
+
+    const updated = await prisma.rule.update({ where: { id: req.params.id }, data });
     return success(res, { rule: updated });
   } catch (err) { next(err); }
 };
