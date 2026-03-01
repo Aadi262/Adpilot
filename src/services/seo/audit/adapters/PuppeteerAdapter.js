@@ -93,11 +93,23 @@ class PuppeteerAdapter extends BaseCrawlerAdapter {
         ? finalResponse.request().redirectChain().map((r) => r.url())
         : [];
 
+      // ── Response headers (for security-header rules) ─────────────────────
+      // Extract only the security-relevant subset — storing all headers would
+      // bloat the page objects for large sites.
+      const allHeaders = finalResponse ? finalResponse.headers() : {};
+      const responseHeaders = {
+        'x-frame-options':          allHeaders['x-frame-options']          ?? null,
+        'x-content-type-options':   allHeaders['x-content-type-options']   ?? null,
+        'strict-transport-security':allHeaders['strict-transport-security'] ?? null,
+        'content-security-policy':  allHeaders['content-security-policy']  ?? null,
+      };
+
       // ── Non-2xx pages: record as failed, still extract what we can ───────
       if (statusCode >= 400) {
         return this._buildFailedPage(url, finalUrl, depth, `HTTP ${statusCode}`, loadTimeMs, {
           statusCode,
           redirectChain,
+          responseHeaders,
         });
       }
 
@@ -167,19 +179,34 @@ class PuppeteerAdapter extends BaseCrawlerAdapter {
       const $h1s   = $('h1');
       const h1Text = $h1s.first().text().trim() || null;
 
+      // Heading structure: ordered list of tag names for hierarchy checks.
+      // Capped at 50 to bound memory on pages with many headings.
+      const headingStructure = [];
+      $('h1,h2,h3,h4,h5,h6').slice(0, 50).each((_, el) => {
+        headingStructure.push(el.tagName.toLowerCase());
+      });
+
       // ── Canonical ────────────────────────────────────────────────────────
       const canonicalTag = $('link[rel="canonical"]').attr('href')?.trim() || null;
 
+      // ── Image audit ──────────────────────────────────────────────────────
+      const $allImages      = $('img');
+      const $missingAlt     = $('img:not([alt]), img[alt=""]');
+
+      // Images missing explicit width AND height (causes CLS)
+      let imagesMissingDimensions = 0;
+      let hasLazyImages = false;
+      $allImages.each((_, el) => {
+        const $el = $(el);
+        if (!$el.attr('width') && !$el.attr('height')) imagesMissingDimensions++;
+        if ($el.attr('loading') === 'lazy') hasLazyImages = true;
+      });
+
       // ── Word count ───────────────────────────────────────────────────────
-      // Remove noise elements before extracting body text
+      // Remove noise elements AFTER image/heading extraction
       $('script, style, noscript, nav, footer, header').remove();
       const bodyText  = $('body').text().replace(/\s+/g, ' ').trim();
       const wordCount = bodyText ? bodyText.split(/\s+/).filter(Boolean).length : 0;
-
-      // ── Image alt audit ──────────────────────────────────────────────────
-      // img[alt=""] counts as missing (empty string is not descriptive)
-      const $allImages      = $('img');
-      const $missingAlt     = $('img:not([alt]), img[alt=""]');
 
       return {
         url,
@@ -198,15 +225,19 @@ class PuppeteerAdapter extends BaseCrawlerAdapter {
         h1Count:            $h1s.length,
         h1Text,
         h2Count:            $('h2').length,
+        headingStructure,
         wordCount,
-        imagesMissingAlt:   $missingAlt.length,
-        totalImages:        $allImages.length,
+        imagesMissingAlt:          $missingAlt.length,
+        imagesMissingDimensions,
+        totalImages:               $allImages.length,
+        hasLazyImages,
 
         internalLinksCount: internalLinks.length,
         externalLinksCount: externalLinks.length,
         internalLinks,      // CrawlEngine uses this for BFS expansion
 
         canonicalTag,
+        responseHeaders,
         hasSchema:     $('script[type="application/ld+json"]').length > 0,
         hasOpenGraph:  $('meta[property^="og:"]').length > 0,
         hasViewport:   $('meta[name="viewport"]').length > 0,
@@ -288,30 +319,34 @@ class PuppeteerAdapter extends BaseCrawlerAdapter {
       url:                requestedUrl,
       finalUrl:           finalUrl || requestedUrl,
       depth,
-      statusCode:         overrides.statusCode  ?? 0,
+      statusCode:         overrides.statusCode    ?? 0,
       redirectChain:      overrides.redirectChain ?? [],
       failed:             true,
       failReason,
       loadTimeMs,
 
-      title:              null,
-      titleLength:        0,
-      metaDescription:    null,
-      metaDescLength:     0,
-      h1Count:            0,
-      h1Text:             null,
-      h2Count:            0,
-      wordCount:          0,
-      imagesMissingAlt:   0,
-      totalImages:        0,
-      internalLinksCount: 0,
-      externalLinksCount: 0,
-      internalLinks:      [],
-      canonicalTag:       null,
-      hasSchema:          false,
-      hasOpenGraph:       false,
-      hasViewport:        false,
-      isHttps:            requestedUrl.startsWith('https://'),
+      title:                    null,
+      titleLength:              0,
+      metaDescription:          null,
+      metaDescLength:           0,
+      h1Count:                  0,
+      h1Text:                   null,
+      h2Count:                  0,
+      headingStructure:         [],
+      wordCount:                0,
+      imagesMissingAlt:         0,
+      imagesMissingDimensions:  0,
+      totalImages:              0,
+      hasLazyImages:            false,
+      internalLinksCount:       0,
+      externalLinksCount:       0,
+      internalLinks:            [],
+      canonicalTag:             null,
+      responseHeaders:          overrides.responseHeaders ?? {},
+      hasSchema:                false,
+      hasOpenGraph:             false,
+      hasViewport:              false,
+      isHttps:                  requestedUrl.startsWith('https://'),
 
       // CrawlEngine fills these in the post-crawl pass
       inboundLinkCount:   0,

@@ -88,7 +88,7 @@ class CrawlEngine {
 
     const robotsInfo = robotsResult.status === 'fulfilled'
       ? robotsResult.value
-      : { exists: false, blocksCrawl: false };
+      : { exists: false, blocksCrawl: false, disallowedPaths: [] };
 
     const hasSitemap = sitemapResult.status === 'fulfilled'
       ? sitemapResult.value
@@ -154,6 +154,12 @@ class CrawlEngine {
             if (!this._isSameDomain(normalized, baseDomain)) continue;
             if (visited.has(normalized))                   continue;
             if (queued.has(normalized))                    continue;
+
+            // Respect robots.txt disallow paths
+            if (
+              robotsInfo.disallowedPaths?.length &&
+              this._isRobotsDisallowed(normalized, robotsInfo.disallowedPaths)
+            ) continue;
 
             // Check we won't exceed maxPages even accounting for all queued items
             if (pages.length + queued.size + 1 > maxPages) break;
@@ -330,46 +336,70 @@ class CrawlEngine {
         validateStatus: (s) => s < 500, // treat 4xx as "file missing", not error
       });
 
-      if (response.status >= 400) return { exists: false, blocksCrawl: false };
+      if (response.status >= 400) return { exists: false, blocksCrawl: false, disallowedPaths: [] };
 
       const text = typeof response.data === 'string' ? response.data : '';
-      return { exists: true, blocksCrawl: this._parseRobotsBlocksCrawl(text) };
+      return { exists: true, ...this._parseRobots(text) };
     } catch {
-      return { exists: false, blocksCrawl: false };
+      return { exists: false, blocksCrawl: false, disallowedPaths: [] };
     }
   }
 
   /**
-   * Parse robots.txt text for a Disallow: / directive that applies to our
-   * user-agent or the wildcard agent.
+   * Parse robots.txt and return blocksCrawl + all disallowed paths that apply
+   * to our user-agent or the wildcard agent.
    *
-   * Deliberately simple parser — handles the 99% case without edge-case
-   * complexity (wildcard * matching within paths, Crawl-delay, etc.).
+   * Handles: User-agent blocks, Disallow directives (including Disallow: /).
+   * Does NOT handle: Allow overrides, wildcard patterns (e.g. /path/*), Crawl-delay.
    *
    * @param {string} text
-   * @returns {boolean}
+   * @returns {{ blocksCrawl: boolean, disallowedPaths: string[] }}
    */
-  _parseRobotsBlocksCrawl(text) {
-    let inScope      = false;
-    let blocksCrawl  = false;
+  _parseRobots(text) {
+    let inScope         = false;
+    let blocksCrawl     = false;
+    const disallowedPaths = [];
 
     for (const rawLine of text.split('\n')) {
-      const line = rawLine.trim().toLowerCase();
+      const line = rawLine.trim();
       if (!line || line.startsWith('#')) continue;
 
-      if (line.startsWith('user-agent:')) {
-        const agent = line.slice('user-agent:'.length).trim();
+      const lower = line.toLowerCase();
+
+      if (lower.startsWith('user-agent:')) {
+        const agent = lower.slice('user-agent:'.length).trim();
         inScope = (agent === '*') || agent.includes('adpilot');
-      } else if (inScope && line.startsWith('disallow:')) {
+      } else if (inScope && lower.startsWith('disallow:')) {
         const path = line.slice('disallow:'.length).trim();
-        if (path === '/') {
-          blocksCrawl = true;
-          break;
-        }
+        if (!path) continue; // empty Disallow = allow all
+        disallowedPaths.push(path);
+        if (path === '/') blocksCrawl = true;
       }
     }
 
-    return blocksCrawl;
+    return { blocksCrawl, disallowedPaths };
+  }
+
+  /**
+   * Check if a URL's pathname starts with any robots.txt disallow path.
+   *
+   * @param {string}   url
+   * @param {string[]} disallowedPaths
+   * @returns {boolean}
+   */
+  _isRobotsDisallowed(url, disallowedPaths) {
+    let pathname;
+    try {
+      pathname = new URL(url).pathname;
+    } catch {
+      return false;
+    }
+
+    for (const disallowedPath of disallowedPaths) {
+      if (disallowedPath === '/') return true; // entire site blocked
+      if (pathname.startsWith(disallowedPath)) return true;
+    }
+    return false;
   }
 
   /**

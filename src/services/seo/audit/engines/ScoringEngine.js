@@ -107,9 +107,10 @@ class ScoringEngine {
    * @param {Issue[]}      issues           - output of TechnicalAnalyzer.analyze()
    * @param {CrawlResult}  crawlResult      - output of CrawlEngine.crawl()
    * @param {number|null}  [performanceScore] - Lighthouse composite 0-100, or null
+   * @param {object}       [perfMetrics]    - Lighthouse per-metric data for bonus checks
    * @returns {AuditScore}
    */
-  score(issues, crawlResult, performanceScore = null) {
+  score(issues, crawlResult, performanceScore = null, perfMetrics = {}) {
     if (!Array.isArray(issues)) {
       throw new TypeError('ScoringEngine.score: issues must be an array');
     }
@@ -187,7 +188,7 @@ class ScoringEngine {
 
     // ── 4. Weighted overall score ──────────────────────────────────────────────
     const w = this._weights;
-    const overall = parseFloat(
+    const rawOverall = parseFloat(
       (
         categoryRaw.technical   * w.technical   +
         perfScore               * w.performance +
@@ -195,6 +196,38 @@ class ScoringEngine {
         categoryRaw.structure   * w.structure
       ).toFixed(1)
     );
+
+    // ── 4b. Bonus points ───────────────────────────────────────────────────────
+    // Positive signals that reward sites doing things right.
+    // Bonuses are capped so the overall never exceeds 100.
+    let bonus = 0;
+    const livePages = crawlResult.pages.filter(
+      (p) => !p.failed && p.statusCode >= 200 && p.statusCode < 400
+    );
+
+    // +5 HTTPS bonus: every live page was served over HTTPS
+    if (livePages.length > 0 && livePages.every((p) => p.isHttps)) {
+      bonus += 5;
+    }
+
+    // +5 Schema bonus: at least one page has structured data
+    if (livePages.some((p) => p.hasSchema)) {
+      bonus += 5;
+    }
+
+    // +3 Fast LCP bonus: average LCP < 2500ms (Good threshold per Google)
+    const lcp = perfMetrics?.lcp;
+    if (!perfFallback && lcp?.value != null && lcp.value < 2500) {
+      bonus += 3;
+    }
+
+    // +3 Good CLS bonus: average CLS < 0.1 (Good threshold per Google)
+    const cls = perfMetrics?.cls;
+    if (!perfFallback && cls?.value != null && cls.value < 0.1) {
+      bonus += 3;
+    }
+
+    const overall = Math.min(100, parseFloat((rawOverall + bonus).toFixed(1)));
 
     // ── 5. Issue count by severity ─────────────────────────────────────────────
     const issueCount = { critical: 0, high: 0, medium: 0, low: 0, total: 0 };
@@ -241,6 +274,8 @@ class ScoringEngine {
 
     logger.debug(
       {
+        rawOverall,
+        bonus,
         overall,
         grade:       auditScore.grade,
         totalPages,
@@ -276,7 +311,7 @@ class ScoringEngine {
     if (score >= 90) return 'A';
     if (score >= 75) return 'B';
     if (score >= 60) return 'C';
-    if (score >= 45) return 'D';
+    if (score >= 40) return 'D';  // was 45 — Phase 2 boundary update
     return 'F';
   }
 }

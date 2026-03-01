@@ -5,6 +5,7 @@ import {
   TrendingUp, TrendingDown, Minus, FileText,
   ChevronUp, ChevronDown, ChevronRight, Zap,
   CheckCircle, Clock, Activity, Globe, Link, AlertTriangle,
+  Printer,
 } from 'lucide-react';
 import api from '../lib/api';
 
@@ -348,9 +349,26 @@ function FailedState({ audit }) {
 }
 
 // ─── New: Full audit result panel ─────────────────────────────────────────────
-function AuditResultPanel({ auditId, onClose, onComplete }) {
+function AuditResultPanel({ auditId, onClose, onComplete, onRerun }) {
   const queryClient = useQueryClient();
   const [issueTab, setIssueTab] = useState('Technical');
+  const [showRerunConfirm, setShowRerunConfirm] = useState(false);
+
+  const rerunMutation = useMutation({
+    mutationFn: (data) => api.post('/seo/audit', data),
+    onSuccess: (res) => {
+      const newId = res.data.data?.auditId;
+      queryClient.invalidateQueries({ queryKey: ['seo', 'audits'] });
+      setShowRerunConfirm(false);
+      if (newId && onRerun) onRerun(newId);
+    },
+  });
+
+  const handleExportPdf = () => window.print();
+  const handleRerun = () => {
+    if (!audit?.url) return;
+    rerunMutation.mutate({ url: audit.url });
+  };
 
   const { data: audit, isLoading } = useQuery({
     queryKey: ['seo', 'audit', auditId],
@@ -412,10 +430,55 @@ function AuditResultPanel({ auditId, onClose, onComplete }) {
               </div>
             )}
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-secondary transition-colors shrink-0">
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            {/* Export PDF */}
+            {audit && COMPLETE_STATUSES.includes(audit.status) && (
+              <button
+                onClick={handleExportPdf}
+                title="Export as PDF"
+                className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-secondary transition-colors"
+              >
+                <Printer className="w-4 h-4" />
+              </button>
+            )}
+            {/* Re-run audit */}
+            {audit && !showRerunConfirm && (
+              <button
+                onClick={() => setShowRerunConfirm(true)}
+                title="Re-run audit"
+                className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-secondary transition-colors"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
+            )}
+            {/* Close */}
+            <button onClick={onClose} className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-secondary transition-colors">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
+
+        {/* Re-run confirmation strip */}
+        {showRerunConfirm && (
+          <div className="px-5 py-3 bg-orange-500/8 border-b border-orange-500/20 flex items-center justify-between gap-3 shrink-0">
+            <p className="text-xs text-text-secondary">Re-run a fresh audit for this URL?</p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowRerunConfirm(false)}
+                className="px-3 py-1 text-xs rounded-lg border border-border text-text-secondary hover:text-text-primary hover:bg-bg-secondary transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRerun}
+                disabled={rerunMutation.isPending}
+                className="px-3 py-1 text-xs rounded-lg bg-accent-blue text-white hover:bg-accent-blue/90 transition-colors disabled:opacity-50"
+              >
+                {rerunMutation.isPending ? 'Starting…' : 'Confirm Re-run'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Panel body */}
         <div className="flex-1 overflow-y-auto">
@@ -881,6 +944,7 @@ function AuditsTab() {
           auditId={selectedAuditId}
           onClose={() => setSelectedAuditId(null)}
           onComplete={() => queryClient.invalidateQueries({ queryKey: ['seo', 'audits'] })}
+          onRerun={(newId) => setSelectedAuditId(newId)}
         />
       )}
     </div>

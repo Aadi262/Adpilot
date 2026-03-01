@@ -255,7 +255,7 @@ class AuditOrchestrator {
 
     let auditScore;
     try {
-      auditScore = this._scorer.score(issues, crawlResult, performanceData.score);
+      auditScore = this._scorer.score(issues, crawlResult, performanceData.score, performanceData.metrics);
     } catch (err) {
       await this._failAudit(ctx.auditId, `Scoring failed: ${err.message}`);
       throw err;

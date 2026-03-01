@@ -62,10 +62,45 @@ Remaining:
 2. Set `SEO_SUMMARY_ENABLED=true` in `.env`
 3. Restart server — summaries will generate for `pro` and `business` plan teams
 
-### Phase 2 & 3 — Pending
+### Phase 2 (Stronger Rules + Scoring + Crawl + Frontend) — ✅ Complete
 
-Phase 2 (stronger rules, robots.txt crawl, enhanced scoring) and
-Phase 3 (keyword discovery, rank tracking schema) are not yet started.
+**New rule files (7 added — registry now has 23 rules):**
+- `rules/technical/ViewportRule.js` — missing_viewport (high)
+- `rules/technical/SecurityHeadersRule.js` — missing_x_frame_options / missing_x_content_type / missing_hsts (medium/low)
+- `rules/technical/HeadingHierarchyRule.js` — heading_hierarchy_skip (medium)
+- `rules/technical/OpenGraphRule.js` — missing_open_graph (low)
+- `rules/technical/SchemaMarkupRule.js` — missing_schema_markup (low)
+- `rules/content/ImageDimensionsRule.js` — images_missing_dimensions (low)
+- `rules/content/LazyLoadingRule.js` — no_image_lazy_loading (low)
+
+**PuppeteerAdapter extended (4 new fields):**
+- `responseHeaders` — x-frame-options, x-content-type-options, strict-transport-security, content-security-policy
+- `headingStructure` — ordered array of heading tags (h1..h6) capped at 50
+- `imagesMissingDimensions` — count of imgs without width+height
+- `hasLazyImages` — boolean: any img has loading="lazy"
+
+**ScoringEngine enhancements:**
+- New 4th param `perfMetrics` for per-metric bonus checks
+- +5 HTTPS bonus (all live pages over HTTPS)
+- +5 Schema bonus (at least one page has ld+json)
+- +3 Fast LCP bonus (< 2500ms per Google "Good" threshold)
+- +3 Good CLS bonus (< 0.1 per Google "Good" threshold)
+- Grade D boundary: 45 → 40
+
+**CrawlEngine robots.txt path filtering:**
+- `_parseRobots()` returns `{ blocksCrawl, disallowedPaths[] }` (was boolean only)
+- `_isRobotsDisallowed(url, paths)` path-prefix matching
+- BFS loop skips disallowed paths before queuing
+
+**Frontend (SeoPage.jsx):**
+- Export PDF button (🖨️) in audit panel header — shown only when audit is completed
+- Re-run audit button (↻) in audit panel header — available for any loaded audit
+- Inline confirmation strip before re-run executes (orange, Cancel / Confirm)
+- Re-run queues new audit + auto-switches panel to new auditId
+
+### Phase 3 — Pending
+
+Phase 3 (keyword discovery, rank tracking schema, KeywordRank model) not yet started.
 
 ---
 
@@ -117,8 +152,8 @@ Stage 4 (SEO Engine):  ██████████  100%
 Stage 5 (SEO UI):      ██████████  100%
 Stage 6 (Validation):  ██████████  100%
 Stage 7 (Summary):     ██████████  100%
-Phase 2 (Rules++):     ░░░░░░░░░░    0%  ← next
-Phase 3 (Keywords):    ░░░░░░░░░░    0%
+Phase 2 (Rules++):     ██████████  100%  ✅
+Phase 3 (Keywords):    ░░░░░░░░░░    0%  ← next
 Stage 8 (Billing):     ░░░░░░░░░░    0%
 Stage 9 (Deploy):      ░░░░░░░░░░    0%
 ```
@@ -129,9 +164,8 @@ Stage 9 (Deploy):      ░░░░░░░░░░    0%
 
 1. **Enable summary** — set `ANTHROPIC_API_KEY` + `SEO_SUMMARY_ENABLED=true` in `.env`, test end-to-end.
 2. **Manual browser test** — run audit on `https://example.com`, verify result panel (score gauge, categories, issues, metrics, summary).
-3. **Phase 2** — expand rule registry (viewport rule, security headers, heading hierarchy), enhance scoring (bonus points), add robots.txt respect + sitemap parsing to CrawlEngine.
-4. **Phase 3** — keyword discovery from URL, `KeywordRank` Prisma model + migration, rank history API routes.
-5. **Phase 5** — per-team concurrency limits, daily audit rate limits, health endpoint.
+3. **Phase 3** — keyword discovery from URL, `KeywordRank` Prisma model + migration, rank history API routes, Keywords tab wired to real data.
+4. **Phase 5** — per-team concurrency limits, daily audit rate limits, health endpoint.
 
 ---
 
@@ -174,7 +208,7 @@ Backend
   src/services/seo/audit/engines/CrawlEngine.js
   src/services/seo/audit/adapters/PuppeteerAdapter.js
   src/services/seo/audit/engines/TechnicalAnalyzer.js
-  src/services/seo/audit/rules/registry.js   — 16 stateless rule instances
+  src/services/seo/audit/rules/registry.js   — 23 stateless rule instances (Phase 2)
   src/services/seo/audit/engines/PerformanceEngine.js — Lighthouse singleton
   src/services/seo/audit/engines/ScoringEngine.js
   src/services/seo/SeoSummaryService.js      — LLM summary via Anthropic Claude API
@@ -192,4 +226,4 @@ Frontend
 
 ---
 
-*Last updated: 2026-03-01 — Session: Phase 1 fix (SEO_ENGINE_V2=true) + Phase 4 (SeoSummaryService + frontend summary panel)*
+*Last updated: 2026-03-01 — Session: Phase 2 complete (7 new rules, scoring bonuses, robots.txt path filtering, export PDF + re-run buttons)*
