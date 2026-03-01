@@ -8,6 +8,7 @@ const api = axios.create({
     ? `${import.meta.env.VITE_API_URL}/api/v1`
     : '/api/v1',
   headers: { 'Content-Type': 'application/json' },
+  withCredentials: true,
 });
 
 // Attach token from store on every request
