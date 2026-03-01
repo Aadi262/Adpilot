@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { LayoutDashboard, Zap, DollarSign, TrendingUp } from 'lucide-react';
+import { LayoutDashboard, Zap, DollarSign, TrendingUp, Download } from 'lucide-react';
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
   LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -34,7 +35,22 @@ const CustomTooltip = ({ active, payload, label }) => {
   );
 };
 
+function exportCSV(campaigns) {
+  const header = ['Campaign', 'Platform', 'Status', 'Spend', 'ROAS', 'Clicks', 'Impressions'];
+  const rows = (campaigns ?? []).map((c) => [
+    `"${c.name}"`, c.platform, c.status,
+    c.spend, c.roas, c.clicks, c.impressions,
+  ]);
+  const csv = [header, ...rows].map((r) => r.join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `analytics-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+}
+
 export default function AnalyticsPage() {
+  const [range, setRange] = useState('30d');
   const { data: overview, isLoading: loadingOverview } = useQuery({
     queryKey: ['analytics', 'overview'],
     queryFn: () => api.get('/analytics/overview').then((r) => r.data.data),
@@ -54,6 +70,31 @@ export default function AnalyticsPage() {
 
   return (
     <div className="space-y-6">
+      {/* Toolbar */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <h1 className="text-xl font-bold text-text-primary">Analytics</h1>
+        <div className="flex items-center gap-2">
+          <div className="flex bg-bg-card border border-border rounded-lg overflow-hidden text-xs">
+            {['7d','30d','90d'].map((r) => (
+              <button
+                key={r}
+                onClick={() => setRange(r)}
+                className={`px-3 py-1.5 font-medium transition-colors ${range === r ? 'bg-accent-blue/20 text-accent-blue' : 'text-text-secondary hover:text-text-primary'}`}
+              >
+                {r === '7d' ? '7 days' : r === '30d' ? '30 days' : '90 days'}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => exportCSV(campaigns)}
+            disabled={!campaigns?.length}
+            className="btn-secondary flex items-center gap-1.5 text-sm"
+          >
+            <Download className="w-4 h-4" />Export CSV
+          </button>
+        </div>
+      </div>
+
       {/* KPI Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {loadingOverview

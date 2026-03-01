@@ -62,7 +62,7 @@ const audit = await prisma.seoAudit.create({
 });
 
     const job = await queues.seoAudit.add(
-      { teamId, url, auditId: audit.id },
+      { teamId, url, auditId: audit.id, userId: req.user.userId },
       {
         // Deterministic jobId — prevents double-enqueue on accidental double-submit
         jobId: `audit:${teamId}:${audit.id}`,

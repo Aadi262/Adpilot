@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Bell, Menu, CheckCheck } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import useAuthStore from '../../store/authStore';
 import api from '../../lib/api';
@@ -109,8 +109,17 @@ export default function TopBar({ onMenuClick }) {
                 )}
               </div>
 
+              {/* View all link */}
+              <Link
+                to="/notifications"
+                onClick={() => setOpen(false)}
+                className="block px-4 py-2 text-xs text-accent-blue hover:underline border-b border-border text-center"
+              >
+                View all notifications →
+              </Link>
+
               {/* List */}
-              <div className="max-h-80 overflow-y-auto divide-y divide-border">
+              <div className="max-h-72 overflow-y-auto divide-y divide-border">
                 {notifications.length === 0 ? (
                   <div className="py-8 text-center text-text-secondary text-sm">
                     <Bell className="w-7 h-7 mx-auto mb-2 opacity-30" />

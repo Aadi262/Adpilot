@@ -29,6 +29,7 @@ const ruleRoutes        = require('./routes/ruleRoutes');
 const integrationRoutes = require('./routes/integrationRoutes');
 const teamRoutes         = require('./routes/teamRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const userRoutes         = require('./routes/userRoutes');
 
 const app = express();
 
@@ -250,6 +251,7 @@ app.use('/api/v1/rules',        ruleRoutes);
 app.use('/api/v1/integrations', integrationRoutes);
 app.use('/api/v1/team',          teamRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/users/me',      userRoutes);
 
 // ── 404 ───────────────────────────────────────────────────────────────────────
 app.use((req, res) => {

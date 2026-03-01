@@ -54,6 +54,35 @@ export default function DashboardPage() {
   });
 
   const barColors = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444'];
+  const isEmpty = !loadingOverview && (overview?.totalCampaigns ?? 0) === 0;
+
+  if (isEmpty) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
+        <div className="w-16 h-16 rounded-2xl bg-accent-blue/10 flex items-center justify-center mb-5">
+          <LayoutDashboard className="w-8 h-8 text-accent-blue" />
+        </div>
+        <h1 className="text-2xl font-bold text-text-primary mb-2">Welcome to AdPilot</h1>
+        <p className="text-text-secondary text-sm mb-8 max-w-sm">
+          Your AI-powered ad and SEO automation platform is ready. Create your first campaign to get started.
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => navigate('/campaigns')}
+            className="btn-primary flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />Create Campaign
+          </button>
+          <button
+            onClick={() => navigate('/seo')}
+            className="btn-secondary flex items-center gap-2"
+          >
+            Run SEO Audit
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

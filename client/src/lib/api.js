@@ -39,9 +39,16 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status;
+    if (status === 401) {
       useAuthStore.getState().logout();
       window.location.href = '/login';
+    }
+    // 500-level server errors — fire a custom event so any toast listener can react
+    if (status >= 500) {
+      window.dispatchEvent(new CustomEvent('api:server-error', {
+        detail: { message: error.response?.data?.error?.message || 'Server error. Please try again.' },
+      }));
     }
     return Promise.reject(error);
   }
