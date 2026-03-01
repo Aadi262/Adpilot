@@ -66,10 +66,12 @@ app.use((req, res, next) => {
   next();
 });
 
-// ── Static pages ──────────────────────────────────────────────────────────────
-const ROOT = path.join(__dirname, '..');
-app.get('/',           (req, res) => res.sendFile(path.join(ROOT, 'index.html')));
-app.get('/login.html', (req, res) => res.sendFile(path.join(ROOT, 'login.html')));
+// ── Static pages (dev only — in production the frontend is on Vercel) ────────
+if (process.env.NODE_ENV !== 'production') {
+  const ROOT = path.join(__dirname, '..');
+  app.get('/',           (req, res) => res.sendFile(path.join(ROOT, 'index.html')));
+  app.get('/login.html', (req, res) => res.sendFile(path.join(ROOT, 'login.html')));
+}
 
 // ── Health endpoint ───────────────────────────────────────────────────────────
 app.get('/health', async (req, res) => {

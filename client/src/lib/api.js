@@ -2,7 +2,11 @@ import axios from 'axios';
 import useAuthStore from '../store/authStore';
 
 const api = axios.create({
-  baseURL: '/api/v1',
+  // In production VITE_API_URL is set to the Railway backend URL.
+  // In dev the Vite proxy rewrites /api → localhost:3000, so we use a relative path.
+  baseURL: import.meta.env.VITE_API_URL
+    ? `${import.meta.env.VITE_API_URL}/api/v1`
+    : '/api/v1',
   headers: { 'Content-Type': 'application/json' },
 });
 
