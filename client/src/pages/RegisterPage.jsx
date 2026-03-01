@@ -1,19 +1,22 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Zap, AlertCircle, CheckCircle } from 'lucide-react';
+import { Zap, AlertCircle } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 import api from '../lib/api';
+import useAuthStore from '../store/authStore';
 
 export default function RegisterPage() {
-  const navigate = useNavigate();
+  const navigate  = useNavigate();
+  const { setAuth } = useAuthStore();
   const [form, setForm] = useState({ name: '', email: '', password: '', teamName: '' });
-  const [success, setSuccess] = useState(false);
 
   const registerMutation = useMutation({
     mutationFn: (data) => api.post('/auth/register', data),
-    onSuccess: () => {
-      setSuccess(true);
-      setTimeout(() => navigate('/login?from=register'), 2000);
+    onSuccess: (res) => {
+      const { user, accessToken, team } = res.data.data;
+      // Auto-login — ProtectedRoute sees onboardingCompleted=false → redirects to /onboarding
+      setAuth(user, accessToken, team ?? null);
+      navigate('/onboarding');
     },
   });
 
@@ -40,14 +43,7 @@ export default function RegisterPage() {
 
         <div className="card">
           <h2 className="text-xl font-bold text-text-primary mb-1">Create your account</h2>
-          <p className="text-text-secondary text-sm mb-6">Start your free trial today</p>
-
-          {success && (
-            <div className="flex items-center gap-2 bg-accent-green/10 border border-accent-green/20 text-accent-green rounded-lg px-4 py-3 mb-4 text-sm">
-              <CheckCircle className="w-4 h-4 shrink-0" />
-              Account created! Redirecting to login…
-            </div>
-          )}
+          <p className="text-text-secondary text-sm mb-6">Start your free trial — no credit card needed</p>
 
           {errMsg && (
             <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg px-4 py-3 mb-4 text-sm">
@@ -108,10 +104,10 @@ export default function RegisterPage() {
 
             <button
               type="submit"
-              disabled={registerMutation.isPending || success}
+              disabled={registerMutation.isPending}
               className="btn-primary w-full mt-2"
             >
-              {registerMutation.isPending ? 'Creating account…' : 'Create account'}
+              {registerMutation.isPending ? 'Creating account…' : 'Create account →'}
             </button>
           </form>
 

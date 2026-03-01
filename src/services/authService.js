@@ -79,6 +79,8 @@ async function register({ name, email, password, teamName }) {
       name: user.name,
       email: user.email,
       role: user.role,
+      teamId: team.id,
+      onboardingCompleted: false,
     },
     team: {
       id: team.id,
