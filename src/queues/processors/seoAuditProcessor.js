@@ -36,11 +36,14 @@ module.exports = async function seoAuditProcessor(job) {
   }
 
   // ── Legacy path ──────────────────────────────────────────────────────────
-  logger.info('SEO audit job started (legacy engine)', { jobId: job.id, teamId, url });
 
-  const SeoAuditService = require('../../services/seo/SeoAuditService');
-  const audit = await SeoAuditService.audit(teamId, url);
+logger.info('SEO audit job started (legacy engine)', { jobId: job.id, teamId, url });
 
-  logger.info('SEO audit job done (legacy)', { jobId: job.id, score: audit.overallScore });
-  return { auditId: audit.id, score: audit.overallScore };
-};
+const SeoAuditService = require('../../services/seo/SeoAuditService');
+
+// Pass auditId so the service updates the existing record instead of creating a new one
+const audit = await SeoAuditService.audit(teamId, url, job.data.auditId);
+
+logger.info('SEO audit job done (legacy)', { jobId: job.id, score: audit.overallScore });
+return { auditId: audit.id, score: audit.overallScore };
+}

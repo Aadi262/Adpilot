@@ -16,35 +16,94 @@ class SeoAuditService {
    * Fetch and audit a URL for technical SEO issues.
    * Saves result to seo_audits table.
    */
-  async audit(teamId, url) {
+  async audit(teamId, url, existingAuditId = null) {
+    // ── Mark existing record as "running" so frontend shows progress ──────
+    if (existingAuditId) {
+      try {
+        await prisma.seoAudit.update({
+          where: { id: existingAuditId },
+          data:  { status: 'running' },
+        });
+      } catch (err) {
+        // Log but don't crash — the audit itself is more important
+        logger.warn('Could not mark audit as running', {
+          existingAuditId,
+          error: err.message,
+        });
+      }
+    }
+  
+    // ── Fetch the URL ─────────────────────────────────────────────────────
     let html;
     try {
       const response = await axios.get(url, {
-        timeout: 10_000,
-        headers: { 'User-Agent': 'AdPilot-SEO-Auditor/1.0' },
+        timeout:      10_000,
+        headers:      { 'User-Agent': 'AdPilot-SEO-Auditor/1.0' },
         maxRedirects: 5,
       });
       html = response.data;
     } catch (err) {
+      // If we have an existing record, mark it failed so the frontend stops polling
+      if (existingAuditId) {
+        await prisma.seoAudit.update({
+          where: { id: existingAuditId },
+          data:  {
+            status:       'failed',
+            technicalIssues: [{ message: `Could not fetch URL: ${err.message}` }],
+          },
+        }).catch((updateErr) =>
+          logger.error('Could not mark audit as failed after fetch error', {
+            existingAuditId,
+            error: updateErr.message,
+          })
+        );
+      }
       throw AppError.badRequest(`Could not fetch URL: ${err.message}`);
     }
-
-    const $ = cheerio.load(html);
+  
+    // ── Analyse + score ───────────────────────────────────────────────────
+    const $    = cheerio.load(html);
     const issues = this._analyzeHtml($, url);
     const score  = this._calculateScore(issues);
-
-    const audit = await prisma.seoAudit.create({
-      data: {
-        teamId,
-        url,
-        overallScore:    score,
-        technicalIssues: issues,
-        recommendations: this._buildRecommendations(issues),
-        status:          'complete',
-      },
+    const recommendations = this._buildRecommendations(issues);
+  
+    // ── Persist ───────────────────────────────────────────────────────────
+    let audit;
+  
+    if (existingAuditId) {
+      // Update the pre-created record (v2 controller flow)
+      audit = await prisma.seoAudit.update({
+        where: { id: existingAuditId },
+        data:  {
+          overallScore:    score,
+          technicalIssues: issues,
+          recommendations,
+          status:          'complete',
+        },
+      });
+    } else {
+      // Fallback: direct call without a pre-created record (legacy / direct usage)
+      audit = await prisma.seoAudit.create({
+        data: {
+          teamId,
+          url,
+          overallScore:    score,
+          technicalIssues: issues,
+          recommendations,
+          status:          'complete',
+        },
+      });
+    }
+  
+    logger.info('SEO audit complete', {
+      auditId:    audit.id,
+      teamId,
+      url,
+      score,
+      issueCount: issues.length,
+      path:       existingAuditId ? 'update' : 'create',
     });
-
-    logger.info('SEO audit complete', { teamId, url, score, issueCount: issues.length });
+  
     return audit;
   }
 
