@@ -5,7 +5,7 @@ import {
   TrendingUp, TrendingDown, Minus, FileText,
   ChevronUp, ChevronDown, ChevronRight, Zap,
   CheckCircle, Clock, Activity, Globe, Link, AlertTriangle,
-  Printer,
+  Printer, Trash2,
 } from 'lucide-react';
 import api from '../lib/api';
 
@@ -795,11 +795,33 @@ function GenerateBriefModal({ onClose }) {
   );
 }
 
+// ─── Confirm dialog ────────────────────────────────────────────────────────────
+function ConfirmDialog({ title, message, onConfirm, onCancel }) {
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-bg-card border border-border rounded-xl shadow-2xl max-w-sm w-full p-6">
+        <h3 className="text-base font-semibold text-text-primary mb-2">{title}</h3>
+        <p className="text-sm text-text-secondary mb-6">{message}</p>
+        <div className="flex justify-end gap-3">
+          <button onClick={onCancel} className="btn-secondary text-sm px-4">Cancel</button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-red-500 hover:bg-red-600 text-white transition-colors"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Audits Tab (updated) ─────────────────────────────────────────────────────
 function AuditsTab() {
   const queryClient = useQueryClient();
   const [url, setUrl] = useState('');
   const [selectedAuditId, setSelectedAuditId] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null); // audit object | 'all' | null
 
   const { data: audits, isLoading, error } = useQuery({
     queryKey: ['seo', 'audits'],
@@ -815,6 +837,31 @@ function AuditsTab() {
       if (auditId) setSelectedAuditId(auditId); // auto-open result panel
     },
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => api.delete(`/seo/audit/${id}`),
+    onSuccess:  (_, id) => {
+      if (selectedAuditId === id) setSelectedAuditId(null);
+      queryClient.invalidateQueries({ queryKey: ['seo', 'audits'] });
+    },
+  });
+
+  const deleteAllMutation = useMutation({
+    mutationFn: () => api.delete('/seo/audits'),
+    onSuccess:  () => {
+      setSelectedAuditId(null);
+      queryClient.invalidateQueries({ queryKey: ['seo', 'audits'] });
+    },
+  });
+
+  const handleConfirmDelete = () => {
+    if (confirmDelete === 'all') {
+      deleteAllMutation.mutate();
+    } else if (confirmDelete) {
+      deleteMutation.mutate(confirmDelete.id);
+    }
+    setConfirmDelete(null);
+  };
 
   const handleRunAudit = (e) => {
     e.preventDefault();
@@ -858,7 +905,19 @@ function AuditsTab() {
       <div className="card p-0 overflow-hidden">
         <div className="px-5 py-4 border-b border-border flex items-center justify-between">
           <h3 className="text-sm font-semibold text-text-primary">Past Audits</h3>
-          <p className="text-xs text-text-secondary">Click any row to view full report</p>
+          <div className="flex items-center gap-3">
+            <p className="text-xs text-text-secondary">Click any row to view full report</p>
+            {audits?.length > 0 && (
+              <button
+                onClick={() => setConfirmDelete('all')}
+                className="flex items-center gap-1 text-xs text-text-secondary hover:text-red-400 transition-colors"
+                title="Delete all audits"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Clear All
+              </button>
+            )}
+          </div>
         </div>
 
         {isLoading ? (
@@ -886,10 +945,13 @@ function AuditsTab() {
               const issueTotal   = audit.summary?.totalIssues ?? audit.categoryScores?.issueCount?.total ?? null;
 
               return (
-                <button
+                <div
                   key={audit.id}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setSelectedAuditId(audit.id)}
-                  className={`w-full flex items-center gap-4 px-5 py-4 hover:bg-bg-secondary/40 transition-colors text-left ${isSelected ? 'bg-accent-blue/5 border-l-2 border-l-accent-blue' : ''}`}
+                  onKeyDown={(e) => e.key === 'Enter' && setSelectedAuditId(audit.id)}
+                  className={`group w-full flex items-center gap-4 px-5 py-4 hover:bg-bg-secondary/40 transition-colors cursor-pointer ${isSelected ? 'bg-accent-blue/5 border-l-2 border-l-accent-blue' : ''}`}
                 >
                   {/* Score or status indicator */}
                   {isComplete ? (
@@ -930,8 +992,18 @@ function AuditsTab() {
                     )}
                   </div>
 
-                  <ChevronRight className="w-4 h-4 text-text-secondary shrink-0" />
-                </button>
+                  {/* Right-edge: chevron fades out on hover, trash button fades in */}
+                  <div className="relative w-6 h-6 shrink-0">
+                    <ChevronRight className="absolute inset-0 m-auto w-4 h-4 text-text-secondary transition-opacity group-hover:opacity-0" />
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setConfirmDelete(audit); }}
+                      className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded hover:bg-red-500/10 text-text-secondary hover:text-red-400"
+                      title="Delete audit"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
               );
             })}
           </div>
@@ -945,6 +1017,20 @@ function AuditsTab() {
           onClose={() => setSelectedAuditId(null)}
           onComplete={() => queryClient.invalidateQueries({ queryKey: ['seo', 'audits'] })}
           onRerun={(newId) => setSelectedAuditId(newId)}
+        />
+      )}
+
+      {/* Delete confirmation dialog */}
+      {confirmDelete && (
+        <ConfirmDialog
+          title={confirmDelete === 'all' ? 'Delete all audits?' : 'Delete audit?'}
+          message={
+            confirmDelete === 'all'
+              ? 'This will permanently delete all audits. This cannot be undone.'
+              : `Delete audit for ${confirmDelete.url}? This cannot be undone.`
+          }
+          onConfirm={handleConfirmDelete}
+          onCancel={() => setConfirmDelete(null)}
         />
       )}
     </div>

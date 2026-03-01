@@ -126,6 +126,35 @@ exports.getAudits = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+/**
+ * DELETE /api/v1/seo/audit/:id
+ * Delete a single audit record that belongs to the authenticated team.
+ */
+exports.deleteAudit = async (req, res, next) => {
+  try {
+    const { id }     = req.params;
+    const { teamId } = req.user;
+
+    const audit = await prisma.seoAudit.findFirst({ where: { id, teamId }, select: { id: true } });
+    if (!audit) throw AppError.notFound('Audit');
+
+    await prisma.seoAudit.delete({ where: { id } });
+    return res.status(204).end();
+  } catch (err) { next(err); }
+};
+
+/**
+ * DELETE /api/v1/seo/audits
+ * Delete ALL audits for the authenticated team.
+ */
+exports.deleteAllAudits = async (req, res, next) => {
+  try {
+    const { teamId } = req.user;
+    await prisma.seoAudit.deleteMany({ where: { teamId } });
+    return res.status(204).end();
+  } catch (err) { next(err); }
+};
+
 // ── Response mappers ──────────────────────────────────────────────────────────
 
 /**
