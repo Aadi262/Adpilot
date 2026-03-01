@@ -18,7 +18,8 @@ router.use(authenticate);
  */
 router.get('/overview', async (req, res, next) => {
   try {
-    const data = await aggregator.getOverview(req.user.teamId);
+    const range = ['7d', '30d', '90d'].includes(req.query.range) ? req.query.range : '30d';
+    const data = await aggregator.getOverview(req.user.teamId, range);
     return success(res, data);
   } catch (err) {
     next(err);

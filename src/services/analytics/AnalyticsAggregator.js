@@ -12,8 +12,8 @@ class AnalyticsAggregator {
   /**
    * Get overview metrics for a team, with Redis caching.
    */
-  async getOverview(teamId) {
-    const cacheKey = `analytics:overview:${teamId}`;
+  async getOverview(teamId, range = '30d') {
+    const cacheKey = `analytics:overview:${teamId}:${range}`;
     const redis = getRedis();
 
     try {
@@ -143,7 +143,8 @@ class AnalyticsAggregator {
   /** Invalidate cached overview for a team (call after mutations) */
   async invalidateCache(teamId) {
     try {
-      await getRedis().del(`analytics:overview:${teamId}`);
+      const redis = getRedis();
+      await Promise.all(['7d', '30d', '90d'].map((r) => redis.del(`analytics:overview:${teamId}:${r}`)));
     } catch (_) { /* non-critical */ }
   }
 }
