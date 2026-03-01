@@ -3,7 +3,7 @@ import {
   Zap, Shield, DollarSign, AlertTriangle,
   Search, Wand2, TrendingUp, ArrowRight,
   Activity, CheckCircle2, Clock, PauseCircle,
-  Bell, Lock,
+  Bell, ShieldAlert,
 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../lib/api';
@@ -215,13 +215,12 @@ export default function DashboardPage() {
           to="/ads"
         />
         <ActionCard
-          icon={Lock}
+          icon={ShieldAlert}
           iconBg="bg-yellow-500/10"
           iconColor="text-yellow-400"
           title="Budget Protection AI"
           desc="Automatically pause campaigns that exceed CPA or ROAS thresholds."
           to="/budget-ai"
-          comingSoon
         />
       </div>
 
