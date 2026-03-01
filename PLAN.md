@@ -29,6 +29,7 @@ Frontend: React 18 / Vite / Tailwind / React Query / Zustand / Recharts.
 | **11** | **C14: Dashboard/Analytics Architecture Fix** | **✅ Complete** |
 | **12** | **C15: Killer Feature Stubs + Sidebar** | **✅ Complete** |
 | **13** | **Phase D: Killer Features Mock Demo Mode** | **✅ Complete** |
+| **14** | **Phase H: Sellability Sprint** | **✅ Complete** |
 | 9 | Payments / billing integration | ⏳ Pending |
 | 10 | Production deployment | ⏳ Pending |
 
@@ -155,6 +156,44 @@ Commit: `efcfd66c`
 - `MonitorCard` — score, delta badge (TrendingUp/Down), sparkline, alert bell, status badge, next run time
 - `AddMonitorModal` — url, name, schedule select
 - `MonitorDetailPanel` — side panel with Recharts LineChart (score trend), run history table, alert cards, action buttons (run-now, pause/resume, delete)
+
+---
+
+### Phase H — Sellability Sprint ✅ Complete
+
+**Overall progress: ~92%**
+
+| Sub-task | Status | Notes |
+|----------|--------|-------|
+| H1 Landing page copy surgery | ✅ | Hero "Your Ads Are Bleeding / Money Right Now", Indian brands, Budget Guardian first in features, pricing FOMO |
+| H2.1 "Try Live Demo" button in hero | ✅ | Below main CTAs, no-signup link to /demo-login |
+| H2.2 Backend POST /auth/demo-login | ✅ | demoController.js — finds/creates shared demo team, seeds campaigns+notifications, returns JWT |
+| H2.3 Frontend /demo-login page | ✅ | DemoLoginPage.jsx — auto-calls API on mount, redirects to /dashboard |
+| H2.4 Demo banner in TopBar | ✅ | Amber bar when isDemo=true, "Create free account →" link |
+| H3.1 OnboardingPage 4-step wizard | ✅ | Progress bar, step dots, company name + challenge → platforms → SEO scan → celebration |
+| H3.2 Backend onboarding-complete | ✅ | POST /users/me/onboarding-complete, updates user.onboardingCompleted + team name |
+| H3.3 ProtectedRoute onboarding redirect | ✅ | Redirects to /onboarding if !user.onboardingCompleted and !isDemo |
+| H3.4 RegisterPage → onboarding | ✅ | Via ProtectedRoute logic (login → onboarding check fires automatically) |
+| H3.5 SeoPage URL param autorun | ✅ | useSearchParams, passes initialUrl+autoRun to AuditsTab, auto-triggers audit 800ms after mount |
+| H4 BudgetProtectionPage full UI | ✅ | Scan results, status banner, alert rules CRUD, How it works (Phase D) |
+| H5 PricingPage /pricing | ✅ | Free/Growth/Scale tiers, annual toggle, FAQ accordion, public route |
+| H6 Sidebar restructure | ✅ | 4 grouped sections (core, AI TOOLS, INTELLIGENCE, SETTINGS), badges, upgrade banner |
+| H7 Dashboard refresh | ✅ | Greeting, quick action cards, activity feed |
+| H8.1 index.html meta tags | ✅ | New title, description, og:title, og:description, twitter:card |
+| H8.2 LAUNCH.md | ✅ | Product Hunt launch kit: taglines, description, topics, first comment, checklists |
+
+---
+
+### Phase I — Production Deployment
+
+| Task | Description |
+|------|-------------|
+| I1 | Railway production deployment — push Docker container, set env vars |
+| I2 | Configure production env vars (DATABASE_URL, REDIS_URL, JWT_SECRET, OPENAI_API_KEY, ENCRYPTION_KEY) |
+| I3 | Custom domain (adpilot.app or adpilot.io) |
+| I4 | Vercel for frontend — connect GitHub, set VITE_API_URL |
+| I5 | Smoke test production before launch (auth, demo login, SEO audit, budget scan) |
+| I6 | Update LAUNCH.md with real production URLs |
 
 ---
 

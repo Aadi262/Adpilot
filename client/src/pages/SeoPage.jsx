@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Shield, Search, RefreshCw, Plus, X, AlertCircle,
@@ -1026,9 +1027,9 @@ function ConfirmDialog({ title, message, onConfirm, onCancel }) {
 }
 
 // ─── Audits Tab (updated) ─────────────────────────────────────────────────────
-function AuditsTab() {
+function AuditsTab({ initialUrl = '', autoRun = false }) {
   const queryClient = useQueryClient();
-  const [url, setUrl] = useState('');
+  const [url, setUrl] = useState(initialUrl);
   const [selectedAuditId, setSelectedAuditId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null); // audit object | 'all' | null
 
@@ -1062,6 +1063,15 @@ function AuditsTab() {
       queryClient.invalidateQueries({ queryKey: ['seo', 'audits'] });
     },
   });
+
+  // Auto-trigger audit when navigated from onboarding with ?url=...&autorun=true
+  useEffect(() => {
+    if (!autoRun || !initialUrl.trim()) return;
+    const t = setTimeout(() => {
+      auditMutation.mutate({ url: initialUrl.trim() });
+    }, 800);
+    return () => clearTimeout(t);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleConfirmDelete = () => {
     if (confirmDelete === 'all') {
@@ -2130,6 +2140,9 @@ function MonitorsTab() {
 const TABS = ['Audits', 'Keywords', 'Gaps', 'Monitors'];
 
 export default function SeoPage() {
+  const [searchParams] = useSearchParams();
+  const initialUrl = searchParams.get('url') || '';
+  const autoRun    = searchParams.get('autorun') === 'true';
   const [activeTab, setActiveTab] = useState('Audits');
 
   return (
@@ -2162,7 +2175,7 @@ export default function SeoPage() {
         </div>
       </div>
 
-      {activeTab === 'Audits'   && <AuditsTab />}
+      {activeTab === 'Audits'   && <AuditsTab initialUrl={initialUrl} autoRun={autoRun} />}
       {activeTab === 'Keywords' && <KeywordsTab />}
       {activeTab === 'Gaps'     && <GapsTab />}
       {activeTab === 'Monitors' && <MonitorsTab />}
