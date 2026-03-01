@@ -48,14 +48,16 @@ exports.triggerAudit = async (req, res, next) => {
     }
 
     // ── Pre-create the record so we return auditId before the job runs ──────
-    const audit = await prisma.seoAudit.create({
-      data: {
-        teamId,
-        url,
-        status:        'pending',
-        engineVersion: 2,
-      },
-    });
+    const featureFlags = require('../config/featureFlags');
+
+const audit = await prisma.seoAudit.create({
+  data: {
+    teamId,
+    url,
+    status:        'pending',
+    engineVersion: featureFlags.seoEngine.v2 ? 2 : 1,  // ← uses flag
+  },
+});
 
     const job = await queues.seoAudit.add(
       { teamId, url, auditId: audit.id },
