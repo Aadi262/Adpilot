@@ -21,7 +21,10 @@ const NotificationsPage = lazy(() => import('./pages/NotificationsPage'));
 const AdStudioPage      = lazy(() => import('./pages/AdStudioPage'));
 const ResearchPage      = lazy(() => import('./pages/ResearchPage'));
 const NotFoundPage      = lazy(() => import('./pages/NotFoundPage'));
-const AcceptInvitePage  = lazy(() => import('./pages/AcceptInvitePage'));
+const AcceptInvitePage        = lazy(() => import('./pages/AcceptInvitePage'));
+const BudgetProtectionPage    = lazy(() => import('./pages/BudgetProtectionPage'));
+const CompetitorHijackPage    = lazy(() => import('./pages/CompetitorHijackPage'));
+const ScalingPredictorPage    = lazy(() => import('./pages/ScalingPredictorPage'));
 
 // ─── Loading spinner ──────────────────────────────────────────────────────────
 function PageSpinner() {
@@ -106,8 +109,11 @@ export default function App() {
             <Route path="team"          element={<ErrorBoundary><TeamPage /></ErrorBoundary>} />
             <Route path="settings"      element={<ErrorBoundary><SettingsPage /></ErrorBoundary>} />
             <Route path="notifications" element={<ErrorBoundary><NotificationsPage /></ErrorBoundary>} />
-            <Route path="ads"           element={<ErrorBoundary><AdStudioPage /></ErrorBoundary>} />
-            <Route path="research"      element={<ErrorBoundary><ResearchPage /></ErrorBoundary>} />
+            <Route path="ads"               element={<ErrorBoundary><AdStudioPage /></ErrorBoundary>} />
+            <Route path="research"          element={<ErrorBoundary><ResearchPage /></ErrorBoundary>} />
+            <Route path="budget-ai"         element={<ErrorBoundary><BudgetProtectionPage /></ErrorBoundary>} />
+            <Route path="competitor-hijack" element={<ErrorBoundary><CompetitorHijackPage /></ErrorBoundary>} />
+            <Route path="scaling"           element={<ErrorBoundary><ScalingPredictorPage /></ErrorBoundary>} />
           </Route>
 
           {/* 404 */}

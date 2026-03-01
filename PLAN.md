@@ -26,6 +26,9 @@ Frontend: React 18 / Vite / Tailwind / React Query / Zustand / Recharts.
 | 6 | Audit Validation & Production Hardening | ✅ Complete |
 | 7 | LLM Executive Summary (SeoSummaryService) | ✅ Complete |
 | **8** | **Phase C — Complete UI/UX Polish & Missing Features** | **✅ Complete** |
+| **11** | **C14: Dashboard/Analytics Architecture Fix** | **✅ Complete** |
+| **12** | **C15: Killer Feature Stubs + Sidebar** | **✅ Complete** |
+| **13** | **Phase D: Killer Features Mock Demo Mode** | **✅ Complete** |
 | 9 | Payments / billing integration | ⏳ Pending |
 | 10 | Production deployment | ⏳ Pending |
 
@@ -52,40 +55,78 @@ Frontend: React 18 / Vite / Tailwind / React Query / Zustand / Recharts.
 | C11 Research Hub | ✅ | Competitors, Market Research, Ad Intelligence tabs |
 | C12 Ad Studio | ✅ | All Ads, Generate (3-variation cards + quality scores), A/B Tests stub |
 | C13 Performance | ✅ | Lazy-load all pages, Axios 500 interceptor → toast, offline banner, `/users/me` routes |
-
-**New files:**
-- `src/services/notificationHelper.js` — `createNotification()` shared helper
-- `src/controllers/notificationController.js` — full REST (5 endpoints)
-- `src/controllers/userController.js` — GET/PATCH /users/me, change-password
-- `src/routes/notificationRoutes.js` — GET, PATCH /read-all, PATCH /:id/read, DELETE /:id, POST /test
-- `src/routes/userRoutes.js` — GET /, PATCH /, POST /change-password
-- `client/src/components/ErrorBoundary.jsx` — React class error boundary
-- `client/src/pages/NotificationsPage.jsx` — full notifications list with filter tabs
-- `client/src/pages/SettingsPage.jsx` — Profile / Security / Notifications / Danger Zone tabs
-- `client/src/pages/ResearchPage.jsx` — Competitors / Market Research / Ad Intelligence
-- `client/src/pages/AdStudioPage.jsx` — All Ads / Generate / A/B Tests tabs
-
-**Updated files:**
-- `client/src/App.jsx` — lazy-load all pages, ErrorBoundary per route, new routes (settings/notifications/ads/research)
-- `client/src/components/layout/TopBar.jsx` — "View all notifications →" link
-- `client/src/lib/api.js` — 500 interceptor → custom event → toast
-- `client/src/main.jsx` — ToastProvider wraps app
-- `client/src/pages/DashboardPage.jsx` — hero empty state
-- `client/src/pages/AnalyticsPage.jsx` — date range filter + CSV export
-- `src/queues/processors/seoAuditProcessor.js` — createNotification on complete/fail
-- `src/controllers/campaignController.js` — createNotification on launch/pause
+| C14 Dashboard/Analytics Arch | ✅ | Dashboard = Command Center (live status, quick actions, activity, campaign health). Analytics = Deep Dive (charts, table, CSV) |
+| C15 Killer Feature Pages | ✅ | BudgetProtectionPage, CompetitorHijackPage, ScalingPredictorPage — all wired in App.jsx + Sidebar |
 
 ---
 
-### Phase D — Next: Real API Integrations & Billing
+### Phase D — Killer Features Mock Demo Mode ✅ Complete
+
+#### D1 — Budget Protection AI
+
+**Backend:**
+- `src/services/ai/BudgetProtectionService.js` — scanTeam() (mock alerts from rules + campaign perf), createAlert(), getAlerts(), updateAlert(), deleteAlert()
+- `src/controllers/budgetProtectionController.js` — GET/POST/PATCH/DELETE /alerts + GET /scan
+- `src/routes/budgetProtectionRoutes.js` — mounted at `/api/v1/budget-ai`
+- `prisma/schema.prisma` — CampaignAlert model (alertType, threshold, action, actionValue, isActive, triggeredAt) + `prisma db push`
+
+**Frontend:**
+- `client/src/pages/BudgetProtectionPage.jsx` — Full UI:
+  - Header with "Scan Now" button + last scan time
+  - Status banner (healthy/warning/critical) driven by GET /budget-ai/scan
+  - Active Alerts cards (severity badge, detail, "Apply Fix" → pause campaign)
+  - Alert Rules CRUD table (toggle active, delete) + AddAlertModal
+  - How it works (3 steps)
+
+#### D2 — Competitor Hijack Engine
+
+**Backend:**
+- `src/services/ai/CompetitorHijackService.js` — analyzeCompetitor() with deterministic mock data seeded by domain charCodes
+- `src/controllers/researchController.js` — competitors CRUD + GET /research/hijack-analysis?domain=X
+- `src/routes/researchRoutes.js` — mounted at `/api/v1/research`
+- `src/routes/competitorRoutes.js` — mounted at `/api/v1/competitors` (GET, POST, DELETE /:id)
+
+**Frontend:**
+- `client/src/pages/CompetitorHijackPage.jsx` — Full page:
+  - Analyze Competitor form with step animation (4 phases)
+  - Results: stats row (spend, keywords, opportunities), ad examples grid, keyword gaps table (Track button → POST /seo/keywords), win-back opportunities, messaging angles
+  - Feature grid (no results state)
+  - Waitlist button (localStorage)
+- `client/src/pages/ResearchPage.jsx` — Upgraded "Ad Intelligence" tab with full hijack analysis UI
+
+#### D3 — Scaling Predictor
+
+**Backend:**
+- `src/services/ai/ScalingPredictorService.js` — _computeScore() (deterministic from campaignId charSum), predictScaleReadiness(), getAllCampaignsReadiness()
+- `src/controllers/scalingController.js` — GET /scaling/readiness?campaignId=X + GET /scaling/all-campaigns
+- `src/routes/scalingRoutes.js` — mounted at `/api/v1/scaling`
+
+**Frontend:**
+- `client/src/pages/ScalingPredictorPage.jsx` — Full UI:
+  - Overview stats (ready/caution/not-ready counts)
+  - Campaign cards grid with SVG score gauge (green/orange/red)
+  - Expand to detail: factor progress bars (colored by impact), risk warnings, AI recommendation (Sparkles card)
+  - Apply Scale → ConfirmScaleDialog → PATCH /campaigns/:id budget
+  - Waitlist button (localStorage)
+
+**All 3 pages:**
+- Added to `client/src/App.jsx` lazy routes
+- Added to `client/src/components/layout/Sidebar.jsx` under "AI Features" section with BETA badges
+
+---
+
+### Phase E — Next Sprint
 
 | Task | Description |
 |------|-------------|
-| D1 | Meta Ads API — real campaign sync |
-| D2 | Google Ads API — real campaign sync |
-| D3 | Stripe billing — subscription plans (Starter/Pro/Business) |
-| D4 | Email queue — Resend integration for weekly digest |
-| D5 | Production deployment — Railway/Render + Vercel |
+| E1 | Meta Ads API — real campaign sync (replace mock metrics) |
+| E2 | Google Ads API — real campaign sync |
+| E3 | Stripe billing — Starter $49/mo, Pro $149/mo, Business $399/mo |
+| E4 | Real Budget Protection — real metrics → real alerts → real pausing via Meta/Google APIs |
+| E5 | Real Competitor Intel — Facebook Ad Library API + SerpAPI |
+| E6 | Real Scaling Predictor — 30-day metric history + regression model |
+| E7 | White-label PDF reports — audit + analytics export (react-pdf) |
+| E8 | Production hardening — per-team concurrency limits, daily rate limits, monitoring |
 
 ---
 
@@ -236,7 +277,7 @@ Remaining:
 ## 5. Progress
 
 ```
-Overall:  ████████████████████████░░░░░  80%
+Overall:  ████████████████████████████░░  88%
 
 Stage 1 (Backend):     ██████████  100%
 Stage 2 (Frontend):    ██████████  100%
@@ -248,6 +289,12 @@ Stage 7 (Summary):     ██████████  100%
 Phase 2 (Rules++):     ██████████  100%  ✅
 Delete Audits (UX):    ██████████  100%  ✅
 Phase 3 (Keywords):    ██████████  100%  ✅
+Phase C (UI Polish):   ██████████  100%  ✅
+C14 (Dash/Analytics):  ██████████  100%  ✅
+C15 (Feature Stubs):   ██████████  100%  ✅
+Budget AI (D1):        ████░░░░░░   40%  (mock done, real Meta/Google APIs pending)
+Competitor Intel (D2): ███░░░░░░░   35%  (mock done, real Ad Library API pending)
+Scaling AI (D3):       ████░░░░░░   40%  (mock done, real metric history pending)
 Stage 8 (Billing):     ░░░░░░░░░░    0%
 Stage 9 (Deploy):      ░░░░░░░░░░    0%
 ```
@@ -256,11 +303,10 @@ Stage 9 (Deploy):      ░░░░░░░░░░    0%
 
 ## 6. Next Actions
 
-1. **Enable & test summary** — set `ANTHROPIC_API_KEY` + `SEO_SUMMARY_ENABLED=true` in `.env`, run end-to-end on a real URL.
-2. **Manual browser test** — run audit on `https://example.com`, verify full result panel (score gauge, categories, issues, performance metrics, executive summary).
-3. **Keyword sparkline** — add Recharts `<LineChart>` sparkline to the keywords table using `GET /keywords/:id/history` data (show on row expand or in a detail drawer).
-4. **Production hardening** — per-team concurrency limits (max 2 concurrent audits), daily audit rate limits, `/health` endpoint with Redis + DB liveness checks.
-5. **Stage 8 — Billing** — Stripe integration, plan upgrade/downgrade flow, usage metering.
+**Priority 1:** Set `OPENAI_API_KEY` + test Generate Ads feature (Ad Studio → Generate tab)
+**Priority 2:** Set Meta Ads credentials + test real campaign sync (Integrations → Meta)
+**Priority 3:** Stripe integration for billing (Phase E3) — Starter $49/mo, Pro $149/mo, Business $399/mo
+**Priority 4:** Deploy to production (Railway + Vercel) — all env vars needed: DATABASE_URL, REDIS_URL, JWT_SECRET, JWT_REFRESH_SECRET, ANTHROPIC_API_KEY, ENCRYPTION_KEY
 
 ---
 
@@ -274,6 +320,7 @@ Stage 9 (Deploy):      ░░░░░░░░░░    0%
 | `SEO_SUMMARY_ENABLED` left on with no Anthropic key | Low | SeoSummaryService returns null gracefully; audit completes normally |
 | v1 legacy records have `status: 'complete'` not `'completed'` | Low | `mapV1Audit` handles them; no active path creates v1 records |
 | Bull job retries re-launching Chrome on transient failures | Low | `finally` block always closes browser; retry starts clean |
+| CampaignAlert mock scan uses stored performance — may differ from real Meta/Google data | Medium | Clearly labeled "mock" in UI; Phase E4 replaces with real APIs |
 
 ---
 
@@ -289,6 +336,10 @@ Stage 9 (Deploy):      ░░░░░░░░░░    0%
 | `ScoringEngine` validates weights sum to 1.0 at constructor time | Catches config drift immediately on server start, not silently mid-audit |
 | `summary` column is TEXT, SeoSummaryService result is JSON.stringify'd | Schema already exists as TEXT; stringify/parse avoids migration for now |
 | SeoSummaryService returns null gracefully on any error | Summary is enrichment, not core; audit pipeline must never fail due to LLM errors |
+| ScalingPredictorService uses charSum % range for deterministic scores | Consistent results per campaign across requests; no randomness confusion |
+| CompetitorHijackService seeds mock data from domain string | Same domain = same analysis = believable demo UX without a real API |
+| BudgetProtectionService.scanTeam() evaluates only rules with matching campaignId | Scoped scan prevents cross-team data leakage; real API version replaces the perf mock |
+| CampaignAlert uses `prisma db push` (not migrate dev) | Shadow database incompatibility with existing migrations; db push syncs schema directly |
 
 ---
 
@@ -299,6 +350,18 @@ Stage 9 (Deploy):      ░░░░░░░░░░    0%
   src/routes/seoRoutes.js                     — all /seo/* routes (audit + keyword + gap + brief)
   src/controllers/seoController.js            — audit CRUD, keyword CRUD, discover, history,
                                                 gaps, briefs; v1/v2 mapper + _parseSummary
+  src/routes/budgetProtectionRoutes.js        — /budget-ai/alerts + /budget-ai/scan
+  src/controllers/budgetProtectionController.js — CRUD for CampaignAlert + mock scan
+  src/routes/researchRoutes.js                — /research/hijack-analysis
+  src/routes/competitorRoutes.js              — /competitors CRUD
+  src/controllers/researchController.js       — competitor CRUD + hijack analysis
+  src/routes/scalingRoutes.js                 — /scaling/readiness + /scaling/all-campaigns
+  src/controllers/scalingController.js        — deterministic scale readiness
+
+── AI Services ─────────────────────────────────────────────────────────────────
+  src/services/ai/BudgetProtectionService.js  — scanTeam, createAlert, getAlerts, update, delete
+  src/services/ai/CompetitorHijackService.js  — analyzeCompetitor (mock, domain-seeded)
+  src/services/ai/ScalingPredictorService.js  — _computeScore, predictScaleReadiness, getAllCampaigns
 
 ── SEO Audit Pipeline ───────────────────────────────────────────────────────────
   src/queues/processors/seoAuditProcessor.js  — Bull job router (v2 / legacy)
@@ -309,22 +372,13 @@ Stage 9 (Deploy):      ░░░░░░░░░░    0%
   src/services/seo/audit/engines/PerformanceEngine.js — Lighthouse (serial, fallback)
   src/services/seo/audit/engines/ScoringEngine.js     — weighted scoring, bonuses, letter grade
   src/services/seo/audit/rules/registry.js            — 23 stateless rule instances
-  src/services/seo/audit/rules/technical/             — 12 technical rules
-  src/services/seo/audit/rules/content/               — 7 content rules (incl. ImageDimensions, LazyLoading)
-  src/services/seo/audit/rules/structure/             — 4 structure rules
   src/services/seo/SeoSummaryService.js               — LLM summary via Anthropic Claude API
 
 ── Keyword Tracking ─────────────────────────────────────────────────────────────
-  src/services/seo/KeywordTrackingService.js          — getKeywords (enriched), syncRanks (+history),
-                                                        getOpportunities (Redis-cached)
+  src/services/seo/KeywordTrackingService.js          — getKeywords (enriched), syncRanks (+history)
   src/services/keywords/KeywordService.js             — createKeyword, deleteKeyword
   src/services/keywords/KeywordDiscoveryService.js    — strategy wrapper for discovery
-  src/services/keywords/discovery/AuditDiscoveryStrategy.js — extract title/H1/meta from audit,
-                                                              stopword filter, bigram boost, top 15
-
-── Other SEO Services ───────────────────────────────────────────────────────────
-  src/services/seo/CompetitorGapService.js    — gap analysis (competitor ≤20, us >50)
-  src/services/seo/ContentBriefService.js     — TF-IDF clustering, outline generation
+  src/services/keywords/discovery/AuditDiscoveryStrategy.js — extract from audit rawCrawlData
 
 ── Config ───────────────────────────────────────────────────────────────────────
   src/config/seo.js                           — crawl/lighthouse/scoring constants
@@ -332,25 +386,26 @@ Stage 9 (Deploy):      ░░░░░░░░░░    0%
   src/config/featureFlags.js                  — SEO_ENGINE_V2, LIGHTHOUSE_ENABLED, SEO_SUMMARY_ENABLED
 
 ── Database ─────────────────────────────────────────────────────────────────────
-  prisma/schema.prisma                        — all 14 models incl. KeywordRank (Phase 3)
+  prisma/schema.prisma                        — 15 models incl. KeywordRank (Phase 3) + CampaignAlert (Phase D1)
   prisma/migrations/20260228100000_*/         — SEO audit v2 columns
   prisma/migrations/20260301155759_*/         — keyword_ranks table + Keyword additions
-
-── Queues ───────────────────────────────────────────────────────────────────────
-  src/queues/index.js                         — 7 named Bull queues
-  src/queues/processors/seoAuditProcessor.js  — see above
-  src/queues/processors/keywordSyncProcessor.js — calls KeywordTrackingService.syncRanks
+  (CampaignAlert applied via prisma db push — no migration file)
 
 ── Frontend ─────────────────────────────────────────────────────────────────────
-  client/src/pages/SeoPage.jsx                — full SEO page: AuditsTab (run/list/delete),
-                                                KeywordsTab (add/delete/discover), GapsTab,
-                                                ContentBriefs, AuditResultPanel,
-                                                ExecutiveSummaryPanel, AddKeywordModal,
-                                                ConfirmDialog
-  client/src/lib/api.js                       — Axios instance, auth interceptor, pagination normalizer
-  client/src/App.jsx                          — routes (/seo → SeoPage)
-
+  client/src/pages/DashboardPage.jsx          — Command Center: live status cards, quick actions,
+                                                recent activity feed, campaign health
+  client/src/pages/AnalyticsPage.jsx          — Deep Dive: date range, 5 metrics, 4 charts, CSV export
+  client/src/pages/BudgetProtectionPage.jsx   — Budget AI: scan, alert rules CRUD, active alerts
+  client/src/pages/CompetitorHijackPage.jsx   — Competitor Intel: analyze form, ad examples,
+                                                keyword gaps (Track→SEO), win-back opportunities
+  client/src/pages/ScalingPredictorPage.jsx   — Scaling AI: score gauges, factor bars, apply scale
+  client/src/pages/ResearchPage.jsx           — Research Hub: competitors + market research +
+                                                upgraded Ad Intelligence (full hijack analysis)
+  client/src/pages/SeoPage.jsx                — SEO: audit run/list/delete, keywords, gaps, briefs
+  client/src/App.jsx                          — all routes incl. /budget-ai, /competitor-hijack, /scaling
+  client/src/components/layout/Sidebar.jsx   — nav + AI Features section (Budget AI, Competitor Intel, Scale AI)
+```
 
 ---
 
-*Last updated: 2026-03-01 — Session: Phase 3 complete (KeywordRank model, keyword CRUD, discovery from audit, KeywordsTab rewrite)*
+*Last updated: 2026-03-02 — Session: C14/C15/Phase D complete — dashboard redesign, Budget AI (D1), Competitor Hijack (D2), Scaling Predictor (D3)*

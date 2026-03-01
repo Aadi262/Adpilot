@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Globe, Search, Plus, Trash2, TrendingUp, Target, Copy, ChevronRight,
-  AlertCircle, Zap,
+  AlertCircle, Zap, Loader2, Sparkles, DollarSign, Key,
 } from 'lucide-react';
 import api from '../lib/api';
 import { useToast } from '../components/ui/Toast';
+import Badge from '../components/ui/Badge';
 
 // ─── Competitor section ───────────────────────────────────────────────────────
 function ConfirmDialog({ title, message, onConfirm, onCancel }) {
@@ -253,38 +254,49 @@ function MarketResearchSection() {
   );
 }
 
-// ─── Ad Intelligence section ──────────────────────────────────────────────────
-const MOCK_ADS = [
-  { headline: 'SEO Audit Tool — Free Trial', text: 'Discover 100+ SEO issues on your website instantly. Get your free report today.', cta: 'Start Free Audit' },
-  { headline: 'Boost Rankings with Data', text: 'AI-powered SEO recommendations tailored to your industry. Trusted by 50k+ teams.', cta: 'Try AdPilot Free' },
-  { headline: 'Outrank Your Competitors', text: 'Find keyword gaps and technical issues holding you back. Fix them in minutes.', cta: 'Get Started' },
-];
+// ─── Ad Intelligence section (Competitor Hijack Engine preview) ───────────────
+const ANALYZE_STEPS = ['Scanning ad library…', 'Finding keyword gaps…', 'Analyzing angles…', 'Generating opportunities…'];
 
 function AdIntelSection() {
-  const toast = useToast();
-  const [url, setUrl] = useState('');
-  const [ads, setAds] = useState([]);
+  const toast        = useToast();
+  const queryClient  = useQueryClient();
+  const [url, setUrl]         = useState('');
+  const [result, setResult]   = useState(null);
   const [loading, setLoading] = useState(false);
+  const [step, setStep]       = useState(0);
 
   const research = async () => {
     if (!url.trim()) return;
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1200));
-    setAds(MOCK_ADS);
-    setLoading(false);
+    setResult(null);
+    setStep(0);
+
+    const interval = setInterval(() => setStep((s) => s + 1), 900);
+
+    try {
+      const res = await api.get(`/research/hijack-analysis?domain=${encodeURIComponent(url.trim())}`);
+      clearInterval(interval);
+      setResult(res.data.data);
+    } catch (err) {
+      clearInterval(interval);
+      toast.error(err?.response?.data?.error?.message || 'Analysis failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const copyAngle = (ad) => {
-    navigator.clipboard.writeText(`${ad.headline}\n${ad.text}`);
-    toast.success('Ad copy copied to clipboard');
-  };
+  const addKeyword = useMutation({
+    mutationFn: (keyword) => api.post('/seo/keywords', { keyword }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['seo', 'keywords'] }); toast.success('Keyword added'); },
+    onError: (err) => toast.error(err?.response?.data?.error?.message || 'Failed'),
+  });
 
   return (
     <div className="space-y-4">
       <div className="card space-y-4">
         <div>
-          <h3 className="text-sm font-semibold text-text-primary">Ad Intelligence</h3>
-          <p className="text-xs text-text-secondary mt-0.5">See what ads competitors are running and use proven angles</p>
+          <h3 className="text-sm font-semibold text-text-primary">Competitor Hijack Analysis</h3>
+          <p className="text-xs text-text-secondary mt-0.5">Enter a competitor domain to reveal their ad strategy, keyword gaps, and win-back opportunities</p>
         </div>
         <div className="flex gap-2">
           <input
@@ -292,37 +304,133 @@ function AdIntelSection() {
             placeholder="competitor.com"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && research()}
+            disabled={loading}
           />
           <button
             onClick={research}
             disabled={!url.trim() || loading}
             className="btn-primary whitespace-nowrap flex items-center gap-2"
           >
-            <Search className="w-4 h-4" />
-            {loading ? 'Searching…' : 'Research Ads'}
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+            {loading ? 'Analyzing…' : 'Analyze Competitor'}
           </button>
         </div>
+
+        {loading && (
+          <div className="pt-2 space-y-2">
+            <p className="text-xs text-text-secondary">{ANALYZE_STEPS[step % ANALYZE_STEPS.length]}</p>
+            <div className="flex gap-1.5">
+              {ANALYZE_STEPS.map((_, i) => (
+                <div key={i} className={`h-1 flex-1 rounded-full transition-colors ${i <= step ? 'bg-accent-blue' : 'bg-border'}`} />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      {ads.length > 0 && (
-        <div className="space-y-3">
-          {ads.map((ad, i) => (
-            <div key={i} className="card group">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-accent-blue">{ad.headline}</p>
-                  <p className="text-xs text-text-secondary mt-1 leading-relaxed">{ad.text}</p>
-                  <p className="text-xs text-accent-green mt-1">CTA: {ad.cta}</p>
+      {result && !loading && (
+        <div className="space-y-4">
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="card text-center py-3">
+              <p className="text-lg font-bold text-text-primary">{result.estimatedAdSpend}</p>
+              <p className="text-xs text-text-secondary">Est. Ad Spend</p>
+            </div>
+            <div className="card text-center py-3">
+              <p className="text-lg font-bold text-text-primary">{result.topKeywords?.length ?? 0}</p>
+              <p className="text-xs text-text-secondary">Keywords Found</p>
+            </div>
+            <div className="card text-center py-3">
+              <p className="text-lg font-bold text-text-primary">{result.winbackOpportunities?.length ?? 0}</p>
+              <p className="text-xs text-text-secondary">Opportunities</p>
+            </div>
+          </div>
+
+          {/* Ad examples */}
+          <div>
+            <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Competitor Ads Running Now</h4>
+            <div className="space-y-2">
+              {(result.adExamples ?? []).map((ad, i) => (
+                <div key={i} className="card group">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge status={ad.platform.toLowerCase()} />
+                      </div>
+                      <p className="text-sm font-semibold text-accent-blue">{ad.headline}</p>
+                      <p className="text-xs text-text-secondary mt-1 leading-relaxed">{ad.description}</p>
+                      <p className="text-xs text-accent-green mt-1">CTA: {ad.cta}</p>
+                    </div>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(`${ad.headline}\n${ad.description}`); toast.success('Copied'); }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-xs text-text-secondary hover:text-accent-blue shrink-0"
+                    >
+                      <Copy className="w-3.5 h-3.5" />Copy
+                    </button>
+                  </div>
                 </div>
-                <button
-                  onClick={() => copyAngle(ad)}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-xs text-text-secondary hover:text-accent-blue"
-                >
-                  <Copy className="w-3.5 h-3.5" />Use this angle
-                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Keyword gaps */}
+          <div>
+            <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Keyword Gaps</h4>
+            <div className="card p-0 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-bg-secondary/30">
+                      {['Keyword', 'Their Rank', 'Your Rank', 'Volume', ''].map((h) => (
+                        <th key={h} className="text-left text-xs text-text-secondary font-medium px-4 py-2.5">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {(result.keywordGaps ?? []).map((g, i) => (
+                      <tr key={i} className="hover:bg-bg-secondary/20">
+                        <td className="px-4 py-2.5 text-text-primary text-xs font-medium">{g.keyword}</td>
+                        <td className="px-4 py-2.5 text-accent-green text-xs font-semibold">#{g.theirRank}</td>
+                        <td className="px-4 py-2.5 text-xs">
+                          {g.yourRank ? <span className="text-yellow-400">#{g.yourRank}</span> : <span className="text-text-secondary italic">Not ranking</span>}
+                        </td>
+                        <td className="px-4 py-2.5 text-text-secondary text-xs">{g.volume?.toLocaleString()}/mo</td>
+                        <td className="px-4 py-2.5">
+                          <button
+                            onClick={() => addKeyword.mutate(g.keyword)}
+                            className="text-xs px-2 py-1 rounded-lg bg-accent-blue/10 hover:bg-accent-blue/20 text-accent-blue transition-colors"
+                          >
+                            Track
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
-          ))}
+          </div>
+
+          {/* Win-back opportunities */}
+          <div>
+            <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Win-back Opportunities</h4>
+            <div className="space-y-2">
+              {(result.winbackOpportunities ?? []).map((opp, i) => (
+                <div key={i} className="card space-y-1.5">
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-accent-purple/10 text-accent-purple border border-accent-purple/20 font-medium inline-block">{opp.angle}</span>
+                  <p className="text-sm font-semibold text-text-primary">{opp.suggestedHeadline}</p>
+                  <p className="text-xs text-text-secondary leading-relaxed">{opp.reason}</p>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(opp.suggestedHeadline); toast.success('Headline copied'); }}
+                    className="text-xs flex items-center gap-1 text-text-secondary hover:text-accent-blue transition-colors"
+                  >
+                    <Copy className="w-3 h-3" />Copy headline
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </div>

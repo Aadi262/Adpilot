@@ -29,6 +29,7 @@ model Team {
   contentBriefs ContentBrief[]
   invites      TeamInvite[]
   auditLogs    AuditLog[]
+  campaignAlerts CampaignAlert[]
   @@map("teams")
 }
 
@@ -70,6 +71,7 @@ model Campaign {
   ads    Ad[]
   rules  Rule[]
   notifications Notification[]
+  campaignAlerts CampaignAlert[]
 
   @@index([teamId, status])
   @@index([teamId, deletedAt])
@@ -209,6 +211,25 @@ model ContentBrief {
 
   team Team @relation(fields: [teamId], references: [id])
   @@map("content_briefs")
+}
+
+model CampaignAlert {
+  id          String    @id @default(uuid())
+  teamId      String    @map("team_id")
+  campaignId  String    @map("campaign_id")
+  alertType   String    @map("alert_type")   // 'roas_drop' | 'ctr_collapse' | 'cpa_spike' | 'budget_bleed'
+  threshold   Float
+  action      String    // 'pause' | 'notify' | 'reduce_budget'
+  actionValue Float?    @map("action_value")  // e.g. 20 for "reduce by 20%"
+  isActive    Boolean   @default(true) @map("is_active")
+  triggeredAt DateTime? @map("triggered_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  team     Team     @relation(fields: [teamId], references: [id])
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+
+  @@index([teamId, campaignId])
+  @@map("campaign_alerts")
 }
 
 model Rule {

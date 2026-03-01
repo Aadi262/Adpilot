@@ -12,6 +12,9 @@ import {
   Settings,
   LogOut,
   X,
+  ShieldAlert,
+  Crosshair,
+  TrendingUp,
 } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
 
@@ -26,6 +29,12 @@ const navItems = [
   { label: 'Analytics',       icon: BarChart3,       to: '/analytics' },
   { label: 'Team',            icon: Users,           to: '/team' },
   { label: 'Settings',        icon: Settings,        to: '/settings' },
+];
+
+const killerItems = [
+  { label: 'Budget AI',        icon: ShieldAlert,  to: '/budget-ai',         badge: 'BETA', badgeClass: 'bg-orange-500/20 text-orange-400' },
+  { label: 'Competitor Intel', icon: Crosshair,    to: '/competitor-hijack', badge: 'BETA', badgeClass: 'bg-red-500/20 text-red-400' },
+  { label: 'Scale AI',         icon: TrendingUp,   to: '/scaling',           badge: 'BETA', badgeClass: 'bg-green-500/20 text-accent-green' },
 ];
 
 export default function Sidebar({ open, onClose }) {
@@ -101,6 +110,31 @@ export default function Sidebar({ open, onClose }) {
             >
               <Icon className="shrink-0 w-[18px] h-[18px]" />
               {label}
+            </NavLink>
+          ))}
+
+          {/* Killer Features */}
+          <div className="pt-3 pb-1">
+            <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-text-secondary/50">AI Features</p>
+          </div>
+          {killerItems.map(({ label, icon: Icon, to, badge, badgeClass }) => (
+            <NavLink
+              key={to}
+              to={to}
+              onClick={() => onClose?.()}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+                  isActive
+                    ? 'bg-accent-blue/10 text-accent-blue border border-accent-blue/20'
+                    : 'text-text-secondary hover:text-text-primary hover:bg-bg-card'
+                }`
+              }
+            >
+              <Icon className="shrink-0 w-[18px] h-[18px]" />
+              <span className="flex-1">{label}</span>
+              {badge && (
+                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${badgeClass}`}>{badge}</span>
+              )}
             </NavLink>
           ))}
         </nav>

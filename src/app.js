@@ -20,16 +20,20 @@ const { getRedis }     = require('./config/redis');
 const { queues }       = require('./queues');
 
 // Routes
-const authRoutes        = require('./routes/authRoutes');
-const campaignRoutes    = require('./routes/campaignRoutes');
-const adRoutes          = require('./routes/adRoutes');
-const analyticsRoutes   = require('./routes/analyticsRoutes');
-const seoRoutes         = require('./routes/seoRoutes');
-const ruleRoutes        = require('./routes/ruleRoutes');
-const integrationRoutes = require('./routes/integrationRoutes');
-const teamRoutes         = require('./routes/teamRoutes');
-const notificationRoutes = require('./routes/notificationRoutes');
-const userRoutes         = require('./routes/userRoutes');
+const authRoutes              = require('./routes/authRoutes');
+const campaignRoutes          = require('./routes/campaignRoutes');
+const adRoutes                = require('./routes/adRoutes');
+const analyticsRoutes         = require('./routes/analyticsRoutes');
+const seoRoutes               = require('./routes/seoRoutes');
+const ruleRoutes              = require('./routes/ruleRoutes');
+const integrationRoutes       = require('./routes/integrationRoutes');
+const teamRoutes              = require('./routes/teamRoutes');
+const notificationRoutes      = require('./routes/notificationRoutes');
+const userRoutes              = require('./routes/userRoutes');
+const budgetProtectionRoutes  = require('./routes/budgetProtectionRoutes');
+const researchRoutes          = require('./routes/researchRoutes');
+const competitorRoutes        = require('./routes/competitorRoutes');
+const scalingRoutes           = require('./routes/scalingRoutes');
 
 const app = express();
 
@@ -252,6 +256,10 @@ app.use('/api/v1/integrations', integrationRoutes);
 app.use('/api/v1/team',          teamRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/users/me',      userRoutes);
+app.use('/api/v1/budget-ai',     budgetProtectionRoutes);
+app.use('/api/v1/research',      researchRoutes);
+app.use('/api/v1/competitors',   competitorRoutes);
+app.use('/api/v1/scaling',       scalingRoutes);
 
 // ── 404 ───────────────────────────────────────────────────────────────────────
 app.use((req, res) => {
