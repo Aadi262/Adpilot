@@ -48,7 +48,7 @@ export default function LoginPage() {
     mutationFn: (data) => api.post('/auth/login', data),
     onSuccess: (res) => {
       const { user, accessToken, team } = res.data.data;
-      setAuth(user, accessToken, team || null);
+      setAuth(user, accessToken, team ?? null);
       navigate('/dashboard');
     },
     onError: (err) => {
@@ -63,13 +63,9 @@ export default function LoginPage() {
     onSuccess: (res) => {
       const data = res.data?.data ?? res.data;
       if (data?.accessToken) {
-        setAuth({
-          user:         data.user,
-          team:         data.team,
-          accessToken:  data.accessToken,
-          refreshToken: data.refreshToken,
-        });
-        navigate('/dashboard');
+        // setAuth(user, token, team) — positional args required
+        setAuth(data.user, data.accessToken, data.team ?? null);
+        navigate('/onboarding');
       } else {
         showMessage('Account created! Signing you in...', 'success');
         setTimeout(() => switchTab('login'), 1500);

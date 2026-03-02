@@ -105,15 +105,22 @@ async function login({ email, password }) {
 
   const tokens = generateTokens(user);
 
+  // Fetch team so the frontend store always has name + plan
+  const team = await prisma.team.findUnique({
+    where:  { id: user.teamId },
+    select: { id: true, name: true, slug: true, plan: true },
+  });
+
   return {
     user: {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      teamId: user.teamId,
+      id:                  user.id,
+      name:                user.name,
+      email:               user.email,
+      role:                user.role,
+      teamId:              user.teamId,
       onboardingCompleted: user.onboardingCompleted,
     },
+    team: team ?? null,
     ...tokens,
   };
 }

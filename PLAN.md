@@ -6,6 +6,80 @@
 
 ---
 
+## 0. Local Development Setup
+
+### Quick Start (every session)
+```bash
+# 1. Start Docker services (Postgres + Redis)
+docker compose up -d
+
+# 2. Start backend
+npm run dev          # nodemon — port 3000
+
+# 3. Start frontend (separate terminal)
+cd client && npm run dev   # Vite — port 5173
+
+# 4. Open browser
+open http://localhost:5173
+```
+
+### Docker Services
+| Service  | Container         | Image              | Port | Credentials                          |
+|----------|-------------------|--------------------|------|--------------------------------------|
+| Postgres | adpilot-postgres  | postgres:16-alpine | 5432 | user=postgres pw=postgres db=adpilot |
+| Redis    | adpilot-redis     | redis:7-alpine     | 6379 | no auth                              |
+
+```bash
+# Check containers are healthy
+docker compose ps
+# View Postgres logs
+docker compose logs postgres
+# Reset all data (DESTRUCTIVE)
+docker compose down -v && docker compose up -d && npx prisma db push
+```
+
+### Environment Variables (.env)
+All required variables with dev defaults are in `.env` (committed, safe for dev).
+Copy to production and fill in real secrets:
+
+| Variable           | Dev default                                         | Required |
+|--------------------|-----------------------------------------------------|----------|
+| DATABASE_URL       | postgresql://postgres:postgres@localhost:5432/adpilot | ✅ |
+| REDIS_URL          | redis://localhost:6379                              | ✅       |
+| JWT_SECRET         | adpilot_dev_secret_must_be_32_chars_minimum_x       | ✅ min 32 chars |
+| JWT_REFRESH_SECRET | adpilot_refresh_secret_must_be_32_chars_min_x       | ✅ min 32 chars |
+| ENCRYPTION_KEY     | 0000…0000 (64 zeros)                               | ✅ 64 hex chars |
+| SEO_ENGINE_V2      | true                                                | ✅       |
+| ANTHROPIC_API_KEY  | (empty)                                             | Optional — for SEO summaries |
+| OPENAI_API_KEY     | (empty)                                             | Optional — for Ad Studio generate |
+
+```bash
+# Generate production secrets
+openssl rand -hex 64   # JWT_SECRET / JWT_REFRESH_SECRET
+openssl rand -hex 32   # ENCRYPTION_KEY
+```
+
+### Database Management
+```bash
+# Apply schema changes (preferred over migrate dev in this project)
+npx prisma db push
+
+# Seed demo data (admin@adpilot.com / password123)
+node src/scripts/seed.js
+
+# Open Prisma Studio (DB browser)
+npx prisma studio
+```
+
+### Test Accounts
+| Email                  | Password    | Role    | Notes              |
+|------------------------|-------------|---------|-------------------|
+| admin@adpilot.com      | password123 | admin   | Main dev account  |
+| manager@adpilot.com    | password123 | manager | RBAC testing      |
+| POST /auth/demo-login  | (no body)   | admin   | Live demo account |
+
+---
+
 ## 1. Project Overview
 
 AI-powered ad + SEO automation SaaS.
@@ -233,7 +307,46 @@ Commit: `efcfd66c`
 
 ---
 
-### Phase E — Next Sprint
+### Phase K — Next Major Phase (Planned)
+
+**Goal:** Production readiness — real ad platform integrations, billing, deployment.
+
+#### K1 — Stripe Billing
+- `POST /billing/checkout` — create checkout session (Starter $49/mo, Pro $149/mo, Business $399/mo)
+- `POST /billing/portal` — customer portal (upgrade/cancel)
+- `POST /billing/webhook` — Stripe webhook: payment.succeeded → upgrade plan, subscription.deleted → downgrade
+- Frontend: `/pricing` already built, add "Upgrade" CTA in sidebar upgrade banner
+- Gate features behind plan limits (already in `src/config/limits.js`)
+
+#### K2 — Meta Ads API (Real Campaign Sync)
+- OAuth flow: `GET /integrations/meta/connect` → Meta OAuth → `POST /integrations/meta/callback`
+- Bull job: `integrationSync` queue → fetch campaigns + adsets + insights
+- Store results in `campaign.performance` JSON column → BudgetGuardian + ScalingAnalyzer work unchanged
+- Rate limit: Meta Graph API allows ~200 req/hr per token
+
+#### K3 — Google Ads API (Real Campaign Sync)
+- Similar to K2 — Google OAuth → fetch campaigns + ad groups + performance report
+- Populates same `campaign.performance` column
+
+#### K4 — Production Deployment
+- Railway: `Dockerfile` already present, `railway.json` configured
+- Set all env vars from `.env.example` (see Section 0 of this doc)
+- Vercel for frontend: `VITE_API_URL=https://your-railway-app.railway.app`
+- Run `npx prisma db push` on production DB after first deploy
+
+#### K5 — Real Competitor Intel
+- Facebook Ad Library API (requires business verification)
+- SerpAPI for Google Ads transparency report
+- Replace `CompetitorHijackService` mock with real data
+
+**Pre-requisites:**
+- Stripe account + products created
+- Meta Developer App approved for `ads_read` permission
+- Google Ads Developer token (manager account needed)
+
+---
+
+### Phase E — Next Sprint (Backlog)
 
 | Task | Description |
 |------|-------------|
@@ -526,7 +639,7 @@ Stage 9 (Deploy):      ░░░░░░░░░░    0%
 
 ---
 
-*Last updated: 2026-03-02 — Session: Phase H-FIX — all bugs fixed, all endpoints verified passing*
+*Last updated: 2026-03-03 — Session: Phase J + Bug Fix — real engines, auth team fix, env setup documented*
 
 ---
 

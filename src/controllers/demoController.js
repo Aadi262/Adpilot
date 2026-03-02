@@ -92,6 +92,23 @@ exports.demoLogin = async (req, res, next) => {
       await prisma.campaign.createMany({
         data: DEMO_CAMPAIGNS.map(c => ({ ...c, teamId: demoTeam.id })),
       });
+    } else {
+      // Update existing campaigns to Phase J performance data so BudgetGuardian
+      // and ScalingAnalyzer always have realistic data to work with.
+      // Uses upsert-like: update by name+teamId if the campaign exists.
+      await Promise.all(
+        DEMO_CAMPAIGNS.map(async (c) => {
+          await prisma.campaign.updateMany({
+            where: { teamId: demoTeam.id, name: c.name },
+            data:  {
+              status:      c.status,
+              budget:      c.budget,
+              budgetType:  c.budgetType,
+              performance: c.performance,
+            },
+          });
+        })
+      );
     }
 
     // Seed notifications if missing
