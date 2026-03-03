@@ -5,6 +5,7 @@ const prisma   = require('../../config/prisma');
 const logger   = require('../../config/logger');
 const AppError = require('../../common/AppError');
 const config   = require('../../config');
+const gemini   = require('../ai/GeminiService');
 
 const TfIdf     = natural.TfIdf;
 const tokenizer = new natural.WordTokenizer();
@@ -34,6 +35,11 @@ class ContentBriefService {
     let aiResult = null;
     if (config.openaiApiKey) {
       aiResult = await this._generateWithAI(targetKeyword);
+    }
+
+    // Gemini fallback when OpenAI is not configured
+    if (!aiResult && gemini.isAvailable) {
+      aiResult = await this._generateWithGemini(teamId, targetKeyword);
     }
 
     if (aiResult) {
@@ -98,6 +104,29 @@ Return ONLY the JSON object, no markdown, no extra text.`;
       return parsed;
     } catch (err) {
       logger.warn('ContentBriefService: OpenAI generation failed — using fallback', { err: err.message });
+      return null;
+    }
+  }
+
+  /**
+   * Generate brief via Gemini (free tier fallback when OpenAI is absent).
+   */
+  async _generateWithGemini(teamId, targetKeyword) {
+    try {
+      const relatedKeywords = await prisma.keyword.findMany({
+        where:  { teamId },
+        select: { keyword: true },
+        take:   20,
+      });
+      const result = await gemini.generateContentBrief({
+        keyword:         targetKeyword,
+        relatedKeywords: relatedKeywords.map(k => k.keyword),
+      });
+      if (!result || !result.title || !Array.isArray(result.outline)) return null;
+      if (!SEARCH_INTENTS.includes(result.searchIntent)) result.searchIntent = 'informational';
+      return result;
+    } catch (err) {
+      logger.warn('ContentBriefService: Gemini generation failed — using fallback', { err: err.message });
       return null;
     }
   }

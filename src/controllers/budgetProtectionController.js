@@ -105,3 +105,57 @@ exports.analyzeCampaign = async (req, res, next) => {
     return success(res, result);
   } catch (err) { next(err); }
 };
+
+// POST /api/v1/budget-ai/apply-fix
+// Body: { campaignId, action: 'pause' | 'reduce_budget' }
+exports.applyFix = async (req, res, next) => {
+  try {
+    const { campaignId, action } = req.body;
+    if (!campaignId || !action) throw AppError.badRequest('campaignId and action are required');
+
+    const VALID_ACTIONS = ['pause', 'reduce_budget'];
+    if (!VALID_ACTIONS.includes(action)) {
+      throw AppError.badRequest(`action must be one of: ${VALID_ACTIONS.join(', ')}`);
+    }
+
+    const campaign = await prisma.campaign.findFirst({
+      where: { id: campaignId, teamId: req.user.teamId },
+    });
+    if (!campaign) throw AppError.notFound('Campaign not found');
+
+    let updateData = {};
+    let message    = '';
+
+    if (action === 'pause') {
+      updateData = { status: 'paused' };
+      message    = `Campaign "${campaign.name}" paused by Budget Protection AI`;
+    } else if (action === 'reduce_budget') {
+      const newBudget = Math.round((campaign.budget || 0) * 0.7);
+      updateData = { budget: newBudget };
+      message    = `Campaign "${campaign.name}" budget reduced to ₹${newBudget} (30% cut) by Budget Protection AI`;
+    }
+
+    const updated = await prisma.campaign.update({
+      where: { id: campaignId },
+      data:  updateData,
+    });
+
+    // Create a notification so the team knows what happened
+    await prisma.notification.create({
+      data: {
+        teamId:  req.user.teamId,
+        userId:  req.user.userId,
+        type:    'budget_ai_action',
+        title:   'Budget Protection Applied',
+        message,
+      },
+    }).catch(() => {}); // non-blocking, ignore if notifications table missing fields
+
+    return success(res, {
+      campaignId,
+      action,
+      message,
+      campaign: { id: updated.id, name: updated.name, status: updated.status, budget: updated.budget },
+    });
+  } catch (err) { next(err); }
+};

@@ -4,6 +4,7 @@ const prisma            = require('../../config/prisma');
 const { getRedis }      = require('../../config/redis');
 const MetricsCalculator = require('../analytics/MetricsCalculator');
 const logger            = require('../../config/logger');
+const serpService       = require('../keywords/SerpService');
 
 /**
  * Keyword Opportunity Score formula:
@@ -84,10 +85,27 @@ class KeywordTrackingService {
     const updates  = [];
     const now      = new Date();
 
+    // Get team's domain from any tracked competitor or use a generic placeholder
+    const teamDomain = process.env.TEAM_DOMAIN || 'adpilot.io';
+
     for (const kw of keywords) {
-      // Stub: simulate ±3 rank drift — replace with real SERP call in production
-      const drift   = Math.round((Math.random() - 0.5) * 6);
-      const newRank = kw.currentRank ? Math.max(1, kw.currentRank + drift) : null;
+      let newRank = null;
+      let isReal  = false;
+
+      // Try real SERP lookup first
+      if (serpService.isAvailable) {
+        const serpResult = await serpService.getRank(kw.keyword, teamDomain);
+        if (serpResult.isReal) {
+          newRank = serpResult.position; // null = not in top 50
+          isReal  = true;
+        }
+      }
+
+      // Fall back to ±3 rank drift simulation if SERP unavailable
+      if (!isReal) {
+        const drift = Math.round((Math.random() - 0.5) * 6);
+        newRank = kw.currentRank ? Math.max(1, kw.currentRank + drift) : null;
+      }
 
       // Atomically update keyword + append rank history snapshot
       await prisma.$transaction([

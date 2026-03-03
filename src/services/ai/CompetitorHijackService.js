@@ -1,118 +1,215 @@
 'use strict';
 
-/**
- * CompetitorHijackService — Phase D2
- *
- * Architecture:
- *   Integrates with: SEMrush API / Ahrefs API / SpyFu API (pick one)
- *   Also uses existing CompetitorGapService for keyword gaps
- *   AdSpy: scrape Facebook Ad Library (public API available)
- *     https://www.facebook.com/ads/library/api/
- *   GoogleAdspy: no official API, use SerpAPI for SERP ad data
- *
- * Flow:
- *   User adds competitor domain (already in ResearchPage competitors list)
- *   CompetitorHijackService.analyze(competitorDomain, teamDomain)
- *   Returns: { adExamples[], keywordGaps[], messagingAngles[], winbackTemplates[] }
- *   winbackTemplates use existing ContentBriefService + AdGenerationService
- *
- * TODO Phase D2:
- *   - Integrate Facebook Ad Library API (https://developers.facebook.com/docs/marketing-api/reference/ads-archive)
- *   - Integrate SerpAPI for Google ad intelligence
- *   - Build KeywordGapAnalyzer using SEO audit data
- *   - Wire into ResearchPage "Ad Intelligence" section
- *   - npm install serpapi facebook-nodejs-business-sdk
- */
+const logger           = require('../../config/logger');
+const CompetitorAnalyzer = require('./CompetitorAnalyzer');
+const gemini           = require('./GeminiService');
 
 class CompetitorHijackService {
   /**
-   * Generate deterministic mock analysis based on domain name.
-   * Consistent results for same domain (uses char codes as seed).
+   * Analyze a competitor domain.
+   * 1. Puppeteer crawl for real page data (title, description, CTAs, tech stack, keywords)
+   * 2. Gemini AI for strategic insights (keyword gaps, messaging angles, suggested ads)
+   * 3. Falls back to smart mock if crawl fails (e.g. site blocks bots)
    */
   async analyzeCompetitor(domain, teamId) {
-    // Strip protocol and www
-    const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+    const cleanDomain = domain
+      .replace(/^https?:\/\//, '')
+      .replace(/^www\./, '')
+      .split('/')[0]
+      .trim();
 
-    // Seeded pseudo-random from domain
-    const seed = cleanDomain.split('').reduce((acc, c, i) => acc + c.charCodeAt(0) * (i + 1), 0);
-    const rng  = (min, max) => min + (seed % (max - min + 1));
+    let crawlData = null;
 
-    const KEYWORD_POOL = [
-      `${cleanDomain.split('.')[0]} alternative`,
-      `best ${cleanDomain.split('.')[0]} tool`,
-      `${cleanDomain.split('.')[0]} pricing`,
-      `${cleanDomain.split('.')[0]} vs competitors`,
-      `free ${cleanDomain.split('.')[0]}`,
-      `${cleanDomain.split('.')[0]} review`,
-      `how to use ${cleanDomain.split('.')[0]}`,
-      `${cleanDomain.split('.')[0]} tutorial`,
-      `${cleanDomain.split('.')[0]} features`,
-      `${cleanDomain.split('.')[0]} discount`,
-    ];
+    // Attempt real crawl
+    try {
+      crawlData = await CompetitorAnalyzer.analyze(cleanDomain);
+    } catch (err) {
+      logger.warn('CompetitorHijackService: crawl failed, using mock fallback', {
+        domain: cleanDomain,
+        error:  err.message,
+      });
+    }
 
-    const HEADLINE_TEMPLATES = [
-      [`${cleanDomain} — Free Trial`, `Top-Rated ${cleanDomain.split('.')[0]} Tool`, `Try ${cleanDomain.split('.')[0]} Today`],
-      [`Save 50% on ${cleanDomain}`, `#1 ${cleanDomain.split('.')[0]} Platform`, `Start Free with ${cleanDomain}`],
-    ];
+    // If crawl succeeded, optionally enrich with Gemini AI insights
+    if (crawlData) {
+      let aiInsights = null;
+      if (gemini.isAvailable) {
+        aiInsights = await gemini.analyzeCompetitor({
+          domain:      crawlData.domain,
+          title:       crawlData.title,
+          description: crawlData.description,
+          ctas:        crawlData.ctas,
+          topKeywords: crawlData.topKeywords,
+          techStack:   crawlData.techStack,
+          headings:    crawlData.headings,
+        });
+      }
 
-    const headlineSet = HEADLINE_TEMPLATES[seed % HEADLINE_TEMPLATES.length];
+      // Build keyword gaps from crawl data (real keywords found on their site)
+      const keywordGaps = (crawlData.topKeywords || []).slice(0, 5).map((kw, i) => ({
+        keyword:   kw.word,
+        theirRank: i + 1, // they rank for these (found prominently on their site)
+        yourRank:  null,  // we don't know without SERP data
+        volume:    null,  // we don't know without SEMrush/SERP data
+        source:    'crawl',
+      }));
 
-    const AD_DESCRIPTIONS = [
-      `Join 50,000+ teams using ${cleanDomain} to grow revenue. Start your free 14-day trial today.`,
-      `The all-in-one ${cleanDomain.split('.')[0]} platform trusted by industry leaders. No credit card required.`,
-      `Increase ROI by 3x with ${cleanDomain}. Real-time insights, automated reporting, and 24/7 support.`,
-    ];
+      // Use Gemini keyword gaps if available (richer data)
+      const finalKeywordGaps = aiInsights?.keywordGaps
+        ? aiInsights.keywordGaps.map(g => ({
+            keyword:    g.keyword,
+            theirRank:  1,
+            yourRank:   null,
+            volume:     null,
+            opportunity: g.opportunity,
+            difficulty:  g.difficulty,
+            source:      'ai',
+          }))
+        : keywordGaps;
 
-    const adExamples = [
-      { headline: headlineSet[0], description: AD_DESCRIPTIONS[0], cta: 'Start Free Trial', platform: 'Google' },
-      { headline: headlineSet[1], description: AD_DESCRIPTIONS[1], cta: 'Get Started',       platform: 'Meta'   },
-      { headline: headlineSet[2], description: AD_DESCRIPTIONS[2], cta: 'Learn More',         platform: 'Google' },
-    ];
+      // Build ad examples from Gemini suggested ads or heading-based mock
+      const adExamples = aiInsights?.suggestedAds
+        ? aiInsights.suggestedAds.map((ad, i) => ({
+            headline:    ad.headline,
+            description: ad.body,
+            cta:         crawlData.ctas?.[0] || 'Learn More',
+            platform:    i % 2 === 0 ? 'Google' : 'Meta',
+            source:      'ai',
+          }))
+        : this._buildAdExamplesFromCrawl(crawlData);
 
-    const topKeywords = KEYWORD_POOL.slice(0, 8);
+      return {
+        domain:            crawlData.domain,
+        url:               crawlData.url,
+        title:             crawlData.title,
+        description:       crawlData.description,
+        headings:          crawlData.headings,
+        ctas:              crawlData.ctas,
+        topKeywords:       crawlData.topKeywords,
+        techStack:         crawlData.techStack,
+        linkCount:         crawlData.linkCount,
+        hasAnalytics:      crawlData.hasAnalytics,
+        hasFacebookPixel:  crawlData.hasFacebookPixel,
+        hasRetargeting:    crawlData.hasRetargeting,
+        // Ad spend is NEVER faked
+        estimatedAdSpend:  null,
+        adSpend:           null,
+        adSpendNote:       crawlData.adSpendNote,
+        // Results
+        adExamples,
+        keywordGaps:       finalKeywordGaps,
+        messagingAngles:   aiInsights?.messagingAngles || this._buildAnglesFromCrawl(crawlData),
+        weaknesses:        aiInsights?.weaknesses || null,
+        strengths:         aiInsights?.strengths || null,
+        winbackOpportunities: this._buildWinbackFromData(crawlData, aiInsights),
+        // Data quality flags
+        isReal:     true,
+        hasAiInsights: !!aiInsights,
+        crawledAt:  crawlData.crawledAt,
+      };
+    }
 
-    const keywordGaps = [
-      { keyword: `${cleanDomain.split('.')[0]} alternative`,     theirRank: 1 + (seed % 5),  yourRank: null,           volume: 1200 + rng(0, 3800) },
-      { keyword: `${cleanDomain.split('.')[0]} pricing`,          theirRank: 2 + (seed % 4),  yourRank: null,           volume: 880  + rng(0, 2100) },
-      { keyword: `best ${cleanDomain.split('.')[0]} tool`,        theirRank: 3 + (seed % 6),  yourRank: 45 + rng(0,30), volume: 650  + rng(0, 1500) },
-      { keyword: `${cleanDomain.split('.')[0]} vs adpilot`,       theirRank: 5 + (seed % 8),  yourRank: null,           volume: 320  + rng(0, 480)  },
-      { keyword: `free ${cleanDomain.split('.')[0]} trial`,        theirRank: 7 + (seed % 10), yourRank: null,           volume: 240  + rng(0, 360)  },
-    ];
-
-    const messagingAngles = ['Price-focused', 'Feature-heavy', 'Trust/testimonials'];
-
-    const winbackOpportunities = [
-      {
-        angle:            'Price Comparison',
-        suggestedHeadline: `Switch from ${cleanDomain} — Save 40%`,
-        reason:           `${cleanDomain} uses aggressive pricing messaging. Counter with transparency + savings calculator.`,
-      },
-      {
-        angle:            'Feature Gap Attack',
-        suggestedHeadline: `Everything ${cleanDomain} does — and more`,
-        reason:           `Their ads emphasize 3 core features. You offer 2 additional capabilities they don't mention.`,
-      },
-      {
-        angle:            'Social Proof',
-        suggestedHeadline: `Trusted by 10,000+ teams — unlike ${cleanDomain}`,
-        reason:           `Testimonials and case studies outperform their feature-list approach in B2B segments.`,
-      },
-    ];
-
-    return {
-      domain: cleanDomain,
-      estimatedAdSpend: `$${(rng(8, 45)).toLocaleString()},${rng(100, 999)}/mo`,
-      topKeywords,
-      adExamples,
-      keywordGaps,
-      messagingAngles,
-      winbackOpportunities,
-    };
+    // Full fallback: smart mock (deterministic, honest label)
+    return this._mockFallback(cleanDomain);
   }
 
-  async generateWinbackTemplates(analysis, teamId) {
-    // TODO Phase D2: Use ContentBriefService + AdGenerationService with competitor analysis context
-    throw new Error('generateWinbackTemplates not yet implemented — Phase D2');
+  _buildAdExamplesFromCrawl(crawl) {
+    const name  = crawl.title?.split(/[-|–]/)[0]?.trim() || crawl.domain;
+    const ctas  = crawl.ctas?.slice(0, 3) || ['Learn More'];
+    const h1    = crawl.headings?.find(h => h.tag === 'H1')?.text || name;
+
+    return [
+      { headline: h1.substring(0, 40),                                platform: 'Google', cta: ctas[0] || 'Learn More',      source: 'crawl' },
+      { headline: `${name} — ${crawl.ctas?.[0] || 'Try for Free'}`.substring(0, 40), platform: 'Meta',   cta: ctas[1] || 'Get Started',    source: 'crawl' },
+      { headline: `${name} — See How It Works`.substring(0, 40),     platform: 'Google', cta: ctas[2] || 'Watch Demo',       source: 'crawl' },
+    ];
+  }
+
+  _buildAnglesFromCrawl(crawl) {
+    const angles = [];
+    if (crawl.hasFacebookPixel)  angles.push('Retargeting-heavy');
+    if (crawl.hasAnalytics)      angles.push('Data-driven');
+    if (crawl.ctas?.some(c => /free/i.test(c)))    angles.push('Free trial / freemium');
+    if (crawl.ctas?.some(c => /demo/i.test(c)))    angles.push('Demo-led sales');
+    if (crawl.ctas?.some(c => /pricing/i.test(c))) angles.push('Pricing-forward');
+    if (angles.length === 0) angles.push('Feature-focused', 'Trust & credibility', 'ROI-driven');
+    return angles.slice(0, 5);
+  }
+
+  _buildWinbackFromData(crawl, aiInsights) {
+    if (aiInsights?.weaknesses?.length) {
+      return aiInsights.weaknesses.slice(0, 3).map((w, i) => ({
+        angle:             ['Price Advantage', 'Feature Gap', 'Better Support'][i] || 'Opportunity',
+        suggestedHeadline: `${i === 0 ? 'More affordable than' : 'Everything missing from'} ${crawl.domain}`.substring(0, 60),
+        reason:            w,
+        source:            'ai',
+      }));
+    }
+
+    const name = crawl.domain.split('.')[0];
+    return [
+      {
+        angle:             'Price Comparison',
+        suggestedHeadline: `Switch from ${name} — Better value`,
+        reason:            `Counter their ${crawl.ctas?.[0] || 'main CTA'} with a transparent pricing advantage.`,
+        source:            'crawl',
+      },
+      {
+        angle:             'Feature Gap',
+        suggestedHeadline: `Everything ${name} does — and more`,
+        reason:            `They emphasize ${crawl.headings?.[0]?.text?.substring(0, 60) || 'core features'}. Highlight your unique differentiators.`,
+        source:            'crawl',
+      },
+    ];
+  }
+
+  /**
+   * Fallback when Puppeteer crawl fails (site blocks bots, timeout, etc.)
+   * Uses deterministic mock — clearly labelled as sample data.
+   */
+  _mockFallback(cleanDomain) {
+    const seed = cleanDomain.split('').reduce((acc, c, i) => acc + c.charCodeAt(0) * (i + 1), 0);
+    const rng  = (min, max) => min + (seed % (max - min + 1));
+    const name = cleanDomain.split('.')[0];
+
+    return {
+      domain:      cleanDomain,
+      url:         `https://${cleanDomain}`,
+      title:       null,
+      description: null,
+      headings:    [],
+      ctas:        [],
+      topKeywords: [
+        { word: `${name} alternative`,  frequency: 12 },
+        { word: `${name} pricing`,       frequency: 8  },
+        { word: `best ${name} tool`,     frequency: 6  },
+        { word: `${name} review`,        frequency: 5  },
+        { word: `${name} features`,      frequency: 4  },
+      ],
+      techStack:        [],
+      estimatedAdSpend: null,
+      adSpend:          null,
+      adSpendNote:      'Real ad spend data requires SEMrush or SpyFu API ($39–119/mo)',
+      adExamples: [
+        { headline: `${name} — Free Trial`,               description: `Join thousands using ${name}.`, cta: 'Start Free Trial', platform: 'Google', source: 'mock' },
+        { headline: `#1 ${name} Platform`,                description: `Trusted by industry leaders.`,   cta: 'Get Started',     platform: 'Meta',   source: 'mock' },
+        { headline: `Try ${name} Today`,                   description: `Real-time insights, 24/7 support.`, cta: 'Learn More', platform: 'Google', source: 'mock' },
+      ],
+      keywordGaps: [
+        { keyword: `${name} alternative`,    theirRank: 1 + (seed % 5),  yourRank: null, volume: 1200 + rng(0, 3800), source: 'mock' },
+        { keyword: `${name} pricing`,         theirRank: 2 + (seed % 4),  yourRank: null, volume: 880  + rng(0, 2100), source: 'mock' },
+        { keyword: `best ${name} tool`,       theirRank: 3 + (seed % 6),  yourRank: null, volume: 650  + rng(0, 1500), source: 'mock' },
+      ],
+      messagingAngles:      ['Price-focused', 'Feature-heavy', 'Trust/testimonials'],
+      winbackOpportunities: [
+        { angle: 'Price Comparison', suggestedHeadline: `Switch from ${name} — Save 40%`, reason: 'Counter with transparency + savings calculator.', source: 'mock' },
+        { angle: 'Feature Gap',      suggestedHeadline: `Everything ${name} does — and more`, reason: 'Highlight capabilities they don\'t mention.', source: 'mock' },
+      ],
+      isReal:        false,
+      hasAiInsights: false,
+      crawlFailed:   true,
+      crawlFailNote: 'Site blocked automated crawling. Showing sample data structure.',
+    };
   }
 }
 

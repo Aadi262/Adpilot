@@ -19,4 +19,7 @@ router.get('/scan', ctrl.scan);
 // Per-campaign health analysis
 router.get('/campaign/:id', ctrl.analyzeCampaign);
 
+// Apply a fix to a campaign (pause or reduce budget)
+router.post('/apply-fix', requireRole('admin', 'manager'), ctrl.applyFix);
+
 module.exports = router;

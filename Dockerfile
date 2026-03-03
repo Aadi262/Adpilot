@@ -64,6 +64,5 @@ COPY src ./src/
 ENV PORT=3000
 EXPOSE ${PORT}
 
-# Run migrations then start. If migrate deploy fails (e.g. shadow-DB issue),
-# fall back to db push so the app still starts.
-CMD ["sh", "-c", "npx prisma migrate deploy || npx prisma db push --accept-data-loss && node src/server.js"]
+# Use db push to always sync schema on deploy (no migration files required).
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node src/server.js"]

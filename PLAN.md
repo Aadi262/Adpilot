@@ -107,6 +107,7 @@ Frontend: React 18 / Vite / Tailwind / React Query / Zustand / Recharts.
 | **15** | **Phase J: Real Engine Implementation** | **✅ Complete** |
 | **16** | **Phase K: Feature Identity System + UI Premium** | **✅ Complete** |
 | **17** | **Phase L1: Responsive UI (mobile/tablet/desktop)** | **✅ Complete** |
+| **18** | **Phase G: Replace Mock Data with Real Data** | **✅ Complete** |
 | 9 | Payments / billing integration | ⏳ Pending |
 | 10 | Production deployment | ⏳ Pending |
 
@@ -818,3 +819,67 @@ client/src/pages/LandingPage.css            — mobile media queries
 - GET /seo/monitors (CRUD: create/list/timeline/pause/resume/delete all pass)
 - SEO audits complete: example.com (79/B), maxleads.in (78/B)
 - Frontend vite build: clean ✓ | Backend app.js loads without errors ✓
+
+---
+
+## Phase G — Replace Mock Data with Real Data ✅ Complete
+
+### Dockerfile Fix
+- CMD changed from `migrate deploy || db push` to `npx prisma db push --accept-data-loss && node src/server.js`
+- Railway deploys now always auto-sync schema
+
+### G1 — Gemini AI Service
+- `src/services/ai/GeminiService.js` — singleton, uses `gemini-2.0-flash` free tier
+  - `generateAds()` — 3 ad variations with emotion/value/urgency angles
+  - `generateContentBrief()` — SEO content brief with outline + meta
+  - `analyzeCompetitor()` — keyword gaps, messaging angles, weaknesses, suggested counter-ads
+  - `generateAuditSummary()` — executive summary for SEO audits
+  - Gracefully returns null if GEMINI_API_KEY not set
+- `src/services/adService.js` — `generateAdWithAI()` tries Gemini first, falls back to mock (labelled `isMock:true`)
+- `src/services/seo/ContentBriefService.js` — tries OpenAI → then Gemini → then TF-IDF fallback
+- `src/config/index.js` — added `geminiApiKey`, `valueSerpKey`
+- `.env` + `.env.example` — `GEMINI_API_KEY`, `VALUESERP_API_KEY` entries with docs
+
+### G2 — Real Competitor Crawl (Puppeteer)
+- `src/services/ai/CompetitorAnalyzer.js` — Puppeteer crawl of any public site
+  - Extracts: title, description, headings (H1-H3), CTAs, tech stack (25 patterns), keyword frequency
+  - Resource blocking (images/fonts/media) for fast crawl
+  - Honest about ad spend: `adSpend: null`, `adSpendNote` explains what needs paid API
+- `src/services/ai/CompetitorHijackService.js` — complete rewrite
+  - Real crawl via CompetitorAnalyzer → Gemini AI insights when available
+  - Falls back to smart mock (labelled `crawlFailed: true`) if site blocks bots
+  - Never fakes ad spend numbers
+- `src/controllers/researchController.js` — removed `isBeta`/`disclaimer` wrapper, returns real data
+
+### G3 — Real SERP Rank Tracking
+- `src/services/keywords/SerpService.js` — ValueSERP API (50 free/month)
+  - `getRank(keyword, domain)` → real Google position in India
+  - `getRanks(keywords[], domain)` → bulk with 1.1s rate limiting
+  - Returns `{isReal: false}` when API key not set
+- `src/services/seo/KeywordTrackingService.js` — `syncRanks()` tries SerpService first, falls back to ±3 drift mock
+
+### G5 — Budget Apply-Fix Endpoint (Real)
+- `src/controllers/budgetProtectionController.js` — `applyFix()` handler
+  - `pause` action: sets campaign.status = 'paused'
+  - `reduce_budget` action: cuts budget by 30%
+  - Creates notification in DB (non-blocking)
+- `src/routes/budgetProtectionRoutes.js` — `POST /budget-ai/apply-fix` (admin/manager only)
+
+### G8 — MockDataBanner Component
+- `client/src/components/ui/MockDataBanner.jsx` — amber banner for data quality labelling
+- `client/src/pages/CompetitorHijackPage.jsx` — complete rewrite:
+  - Shows real crawl data: site title, description, headings, tech stack (colored badges), CTAs
+  - Shows AI insights section only when `hasAiInsights: true`
+  - Replaces fake "Ad Spend" with honest card: null + explanation
+  - MockDataBanner shown when crawl fails or Gemini unavailable
+  - Keyword track buttons on both topKeywords cloud and keywordGaps table
+
+### New .env Variables
+| Variable | Purpose | Get It |
+|---|---|---|
+| `GEMINI_API_KEY` | AI ad gen, briefs, competitor insights | https://aistudio.google.com/apikey (free) |
+| `VALUESERP_API_KEY` | Real Google rank tracking | https://www.valueserp.com/ (50 free/mo) |
+
+### Budget Protection + Scaling Predictor
+- Both were already using real campaign data (BudgetGuardian + ScalingAnalyzer)
+- No mock data was present — confirmed real from Phase J

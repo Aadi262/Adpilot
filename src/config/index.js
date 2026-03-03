@@ -17,7 +17,9 @@ const config = {
   database: {
     url: process.env.DATABASE_URL,
   },
-  openaiApiKey: process.env.OPENAI_API_KEY || null,
+  openaiApiKey:  process.env.OPENAI_API_KEY  || null,
+  geminiApiKey:  process.env.GEMINI_API_KEY  || null,
+  valueSerpKey:  process.env.VALUESERP_API_KEY || null,
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
   email: {
     resendApiKey: process.env.RESEND_API_KEY || null,
