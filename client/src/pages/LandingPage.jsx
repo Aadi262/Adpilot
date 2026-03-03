@@ -1,9 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import './LandingPage.css';
 
 export default function LandingPage() {
   const scrollBarRef = useRef(null);
+  const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
     const bar = scrollBarRef.current;
@@ -132,7 +133,29 @@ export default function LandingPage() {
             <Link to="/pricing" className="nav-btn nav-btn-ghost">Pricing</Link>
             <Link to="/register" className="nav-btn nav-btn-primary">Get Early Access</Link>
           </div>
+          {/* Hamburger — mobile only */}
+          <button
+            className="nav-hamburger"
+            onClick={() => setNavOpen((o) => !o)}
+            aria-label="Toggle menu"
+          >
+            <span className={`nav-ham-line ${navOpen ? 'nav-ham-open-1' : ''}`} />
+            <span className={`nav-ham-line ${navOpen ? 'nav-ham-open-2' : ''}`} />
+            <span className={`nav-ham-line ${navOpen ? 'nav-ham-open-3' : ''}`} />
+          </button>
         </div>
+        {/* Mobile nav dropdown */}
+        {navOpen && (
+          <div className="nav-mobile-menu">
+            <a href="#problem" onClick={() => setNavOpen(false)}>Problem</a>
+            <a href="#features" onClick={() => setNavOpen(false)}>Features</a>
+            <a href="#pricing" onClick={() => setNavOpen(false)}>Pricing</a>
+            <Link to="/login" onClick={() => setNavOpen(false)}>Log in</Link>
+            <Link to="/register" onClick={() => setNavOpen(false)} className="nav-btn nav-btn-primary" style={{ textAlign: 'center' }}>
+              Get Early Access
+            </Link>
+          </div>
+        )}
       </nav>
 
       {/* ===== HERO ===== */}

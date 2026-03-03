@@ -762,9 +762,9 @@ function GenerateBriefModal({ onClose }) {
   const errMsg = mutation.error?.response?.data?.error?.message || mutation.error?.message;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={!mutation.isPending ? onClose : undefined} />
-      <div className="relative w-full max-w-md bg-bg-card border border-border rounded-2xl shadow-2xl">
+      <div className="relative w-full sm:max-w-md bg-bg-card border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h2 className="text-base font-semibold text-text-primary">Generate Content Brief</h2>
           {!mutation.isPending && (
@@ -864,9 +864,9 @@ function BriefDetailModal({ brief, onClose, onDelete }) {
   const intentClass = INTENT_COLORS[brief.searchIntent] || INTENT_COLORS.informational;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-2xl bg-bg-card border border-border rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+      <div className="relative w-full sm:max-w-2xl bg-bg-card border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
@@ -1010,8 +1010,8 @@ function BriefDetailModal({ brief, onClose, onDelete }) {
 // ─── Confirm dialog ────────────────────────────────────────────────────────────
 function ConfirmDialog({ title, message, onConfirm, onCancel }) {
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-bg-card border border-border rounded-xl shadow-2xl max-w-sm w-full p-6">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50">
+      <div className="bg-bg-card border border-border rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-sm p-6">
         <h3 className="text-base font-semibold text-text-primary mb-2">{title}</h3>
         <p className="text-sm text-text-secondary mb-6">{message}</p>
         <div className="flex justify-end gap-3">
@@ -1307,8 +1307,8 @@ function AddKeywordModal({ onClose, onSaved, audits }) {
   const errMsg = createMutation.error?.response?.data?.error?.message || createMutation.error?.message;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-bg-card border border-border rounded-xl shadow-2xl w-full max-w-md">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50">
+      <div className="bg-bg-card border border-border rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-md">
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-border">
           <h3 className="text-base font-semibold text-text-primary">Add Keyword</h3>
@@ -1797,8 +1797,8 @@ function AddMonitorModal({ onClose, onSuccess }) {
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div className="bg-bg-card border border-border rounded-2xl w-full max-w-md shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="bg-bg-card border border-border rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md shadow-xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h2 className="font-semibold text-text-primary">Add SEO Monitor</h2>
           <button onClick={onClose} className="text-text-secondary hover:text-text-primary"><X className="w-5 h-5" /></button>

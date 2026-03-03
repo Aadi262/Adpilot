@@ -339,8 +339,8 @@ function DangerTab() {
       </div>
 
       {showConfirm && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-bg-card border border-red-500/30 rounded-xl shadow-2xl max-w-sm w-full p-6">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50">
+          <div className="bg-bg-card border border-red-500/30 rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-sm p-6">
             <AlertTriangle className="w-8 h-8 text-red-400 mb-3" />
             <h3 className="text-base font-bold text-text-primary mb-2">Delete your account?</h3>
             <p className="text-sm text-text-secondary mb-4">

@@ -102,21 +102,22 @@ export default function Sidebar({ open, onClose }) {
 
   return (
     <>
-      {/* Mobile overlay */}
+      {/* Mobile overlay — only below md */}
       {open && (
-        <div className="fixed inset-0 bg-black/60 z-20 lg:hidden" onClick={onClose} />
+        <div className="fixed inset-0 bg-black/60 z-20 md:hidden" onClick={onClose} />
       )}
 
       <aside className={`
-        fixed top-0 left-0 h-full z-30 flex flex-col
-        w-60 bg-bg-secondary border-r border-border
+        fixed top-0 left-0 h-full z-30 shrink-0 flex flex-col
+        w-60 md:w-14 lg:w-60
+        bg-bg-secondary border-r border-border
         transition-transform duration-300
         ${open ? 'translate-x-0' : '-translate-x-full'}
-        lg:translate-x-0 lg:static lg:z-auto
+        md:translate-x-0 md:static md:z-auto
       `}>
         {/* ── Logo ──────────────────────────────────────────────────────── */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <div className="flex items-center gap-2.5">
+        <div className="flex items-center justify-between px-5 md:px-2 lg:px-5 py-4 border-b border-border">
+          <div className="flex items-center gap-2.5 md:justify-center lg:justify-start w-full">
             {/* A/P airplane logo */}
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600
                             flex items-center justify-center shrink-0">
@@ -125,19 +126,19 @@ export default function Sidebar({ open, onClose }) {
                 <path d="M22 2L15 22L11 13L2 9L22 2Z" />
               </svg>
             </div>
-            <div>
+            <div className="hidden lg:block">
               <span className="font-bold text-sm text-text-primary tracking-tight leading-none">AdPilot</span>
               <span className="block text-[10px] text-text-secondary leading-none mt-0.5">AI Command Center</span>
             </div>
           </div>
-          <button onClick={onClose} className="lg:hidden text-text-secondary hover:text-text-primary transition-colors">
+          <button onClick={onClose} className="md:hidden text-text-secondary hover:text-text-primary transition-colors shrink-0">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* ── Team pill ─────────────────────────────────────────────────── */}
         {team && (
-          <div className="mx-3 mt-3 px-3 py-2 bg-bg-card border border-border rounded-xl">
+          <div className="hidden lg:block mx-3 mt-3 px-3 py-2 bg-bg-card border border-border rounded-xl">
             <p className="text-[10px] text-text-secondary uppercase tracking-wider font-medium">Workspace</p>
             <p className="text-sm font-semibold text-text-primary truncate leading-tight mt-0.5">{team.name}</p>
             {team.plan && (
@@ -147,11 +148,11 @@ export default function Sidebar({ open, onClose }) {
         )}
 
         {/* ── Nav groups ────────────────────────────────────────────────── */}
-        <nav className="flex-1 px-3 py-3 overflow-y-auto space-y-1">
+        <nav className="flex-1 px-3 md:px-1 lg:px-3 py-3 overflow-y-auto space-y-1">
           {NAV_GROUPS.map((group, gi) => (
             <div key={gi} className={gi > 0 ? 'pt-2' : ''}>
               {group.label && (
-                <p className="px-3 mb-1 text-[9px] font-bold uppercase tracking-widest text-text-secondary/40">
+                <p className="hidden lg:block px-3 mb-1 text-[9px] font-bold uppercase tracking-widest text-text-secondary/40">
                   {group.label}
                 </p>
               )}
@@ -159,9 +160,10 @@ export default function Sidebar({ open, onClose }) {
                 <NavLink
                   key={path}
                   to={path}
+                  title={label}
                   onClick={() => onClose?.()}
                   className={({ isActive }) =>
-                    `flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium
+                    `flex items-center gap-3 px-3 md:px-2 md:justify-center lg:justify-start lg:px-3 py-2 rounded-xl text-sm font-medium
                      transition-all duration-150 group ${
                       isActive
                         ? 'bg-accent-blue/10 text-accent-blue border border-accent-blue/20'
@@ -170,7 +172,7 @@ export default function Sidebar({ open, onClose }) {
                   }
                 >
                   <Icon className="shrink-0 w-[17px] h-[17px]" />
-                  <div className="flex-1 min-w-0">
+                  <div className="hidden lg:block flex-1 min-w-0">
                     <span className="block truncate leading-tight">{label}</span>
                     {sublabel && (
                       <span className="block text-[10px] text-text-secondary/60 leading-tight font-normal truncate">
@@ -178,9 +180,9 @@ export default function Sidebar({ open, onClose }) {
                       </span>
                     )}
                   </div>
-                  {liveDot && <LiveDot />}
+                  {liveDot && <span className="hidden lg:flex"><LiveDot /></span>}
                   {badge && (
-                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${BADGE_STYLES[badgeColor] ?? BADGE_STYLES.blue}`}>
+                    <span className={`hidden lg:inline text-[9px] font-bold px-1.5 py-0.5 rounded-full ${BADGE_STYLES[badgeColor] ?? BADGE_STYLES.blue}`}>
                       {badge}
                     </span>
                   )}
@@ -192,7 +194,7 @@ export default function Sidebar({ open, onClose }) {
 
         {/* ── Upgrade banner ────────────────────────────────────────────── */}
         {showUpgradeBanner && !isDemo && (
-          <div className="mx-3 mb-3 p-3 rounded-xl border border-purple-500/20
+          <div className="hidden lg:block mx-3 mb-3 p-3 rounded-xl border border-purple-500/20
                           bg-gradient-to-br from-purple-600/20 via-purple-600/10 to-blue-600/20">
             <p className="text-xs font-semibold text-white/80">Upgrade to Growth</p>
             <p className="text-[11px] text-white/40 mt-0.5 mb-2.5 leading-snug">
@@ -209,20 +211,20 @@ export default function Sidebar({ open, onClose }) {
         )}
 
         {/* ── User section ──────────────────────────────────────────────── */}
-        <div className="px-4 py-3 border-t border-border">
-          <div className="flex items-center gap-3">
+        <div className="px-4 md:px-2 lg:px-4 py-3 border-t border-border">
+          <div className="flex items-center gap-3 md:justify-center lg:justify-start">
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-purple-600
                             flex items-center justify-center text-xs font-bold text-white shrink-0">
               {initials}
             </div>
-            <div className="flex-1 min-w-0">
+            <div className="hidden lg:block flex-1 min-w-0">
               <p className="text-sm font-medium text-text-primary truncate">{user?.name}</p>
               <p className="text-xs text-text-secondary truncate capitalize">{user?.role}</p>
             </div>
             <button
               onClick={handleLogout}
               title="Logout"
-              className="text-text-secondary hover:text-red-400 transition-colors shrink-0"
+              className="hidden lg:block text-text-secondary hover:text-red-400 transition-colors shrink-0"
             >
               <LogOut className="w-4 h-4" />
             </button>

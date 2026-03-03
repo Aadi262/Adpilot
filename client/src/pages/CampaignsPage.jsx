@@ -19,8 +19,8 @@ function SkeletonRow() {
 
 function ConfirmDialog({ title, message, onConfirm, onCancel }) {
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-bg-card border border-border rounded-xl shadow-2xl max-w-sm w-full p-6">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50">
+      <div className="bg-bg-card border border-border rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-sm p-6">
         <h3 className="text-base font-semibold text-text-primary mb-2">{title}</h3>
         <p className="text-sm text-text-secondary mb-6">{message}</p>
         <div className="flex justify-end gap-3">
@@ -68,6 +68,38 @@ export default function CampaignsPage() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['campaigns'] }); setPendingDelete(null); },
   });
 
+  const ActionButtons = ({ c }) => (
+    <div className="flex items-center gap-1.5">
+      {c.status !== 'active' && (
+        <button
+          onClick={() => launchMutation.mutate(c.id)}
+          disabled={launchMutation.isPending}
+          title="Launch"
+          className="p-1.5 text-accent-green hover:bg-accent-green/10 rounded-lg transition-colors"
+        >
+          <Play className="w-3.5 h-3.5" />
+        </button>
+      )}
+      {c.status === 'active' && (
+        <button
+          onClick={() => pauseMutation.mutate(c.id)}
+          disabled={pauseMutation.isPending}
+          title="Pause"
+          className="p-1.5 text-orange-400 hover:bg-orange-400/10 rounded-lg transition-colors"
+        >
+          <Pause className="w-3.5 h-3.5" />
+        </button>
+      )}
+      <button
+        onClick={() => setPendingDelete({ id: c.id, name: c.name })}
+        title="Delete"
+        className="p-1.5 text-text-secondary hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+
   return (
     <div className="space-y-5">
       {/* Toolbar */}
@@ -101,17 +133,66 @@ export default function CampaignsPage() {
           </div>
         </div>
 
+        {/* Desktop button — hidden on mobile (FAB used instead) */}
         <button
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 btn-primary"
+          className="hidden sm:flex items-center gap-2 btn-primary"
         >
           <Plus className="w-4 h-4" />
           New Campaign
         </button>
       </div>
 
-      {/* Table */}
-      <div className="card p-0 overflow-hidden">
+      {/* ── Mobile card list (< sm) ─────────────────────────────────────── */}
+      <div className="sm:hidden space-y-3">
+        {isLoading ? (
+          [...Array(3)].map((_, i) => (
+            <div key={i} className="card space-y-3">
+              <div className="skeleton h-5 rounded w-3/4" />
+              <div className="skeleton h-4 rounded w-1/2" />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="skeleton h-8 rounded" />
+                <div className="skeleton h-8 rounded" />
+              </div>
+            </div>
+          ))
+        ) : (campaigns || []).length === 0 ? (
+          <div className="card text-center py-10 text-text-secondary text-sm">
+            <p className="text-base font-medium mb-1">No campaigns found</p>
+            <p>Tap the + button to create your first campaign.</p>
+          </div>
+        ) : (
+          (campaigns || []).map((c) => (
+            <div key={c.id} className="card">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex-1 min-w-0 mr-2">
+                  <p className="font-semibold text-text-primary truncate">{c.name}</p>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <Badge status={c.platform} />
+                    <Badge status={c.status} showDot />
+                  </div>
+                </div>
+                <ActionButtons c={c} />
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs border-t border-border pt-3">
+                <div>
+                  <p className="text-text-secondary">Budget</p>
+                  <p className="text-text-primary font-medium mt-0.5">
+                    ${Number(c.budget).toLocaleString()} <span className="opacity-60">/ {c.budgetType}</span>
+                  </p>
+                </div>
+                <div>
+                  <p className="text-text-secondary">Created</p>
+                  <p className="text-text-primary mt-0.5">{new Date(c.createdAt).toLocaleDateString()}</p>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* ── Desktop table (≥ sm) ───────────────────────────────────────── */}
+      <div className="hidden sm:block card p-0 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -148,35 +229,7 @@ export default function CampaignsPage() {
                         {new Date(c.createdAt).toLocaleDateString()}
                       </td>
                       <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-1.5">
-                          {c.status !== 'active' && (
-                            <button
-                              onClick={() => launchMutation.mutate(c.id)}
-                              disabled={launchMutation.isPending}
-                              title="Launch"
-                              className="p-1.5 text-accent-green hover:bg-accent-green/10 rounded-lg transition-colors"
-                            >
-                              <Play className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                          {c.status === 'active' && (
-                            <button
-                              onClick={() => pauseMutation.mutate(c.id)}
-                              disabled={pauseMutation.isPending}
-                              title="Pause"
-                              className="p-1.5 text-orange-400 hover:bg-orange-400/10 rounded-lg transition-colors"
-                            >
-                              <Pause className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                          <button
-                            onClick={() => setPendingDelete({ id: c.id, name: c.name })}
-                            title="Delete"
-                            className="p-1.5 text-text-secondary hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                        <ActionButtons c={c} />
                       </td>
                     </tr>
                   ))}
@@ -191,6 +244,15 @@ export default function CampaignsPage() {
           )}
         </div>
       </div>
+
+      {/* Mobile FAB */}
+      <button
+        onClick={() => setShowModal(true)}
+        className="sm:hidden fixed bottom-6 right-6 w-14 h-14 rounded-full btn-primary shadow-2xl
+                   flex items-center justify-center z-10"
+      >
+        <Plus className="w-6 h-6" />
+      </button>
 
       {showModal && <CreateCampaignModal onClose={() => setShowModal(false)} />}
 

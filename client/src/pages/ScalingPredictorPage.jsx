@@ -70,8 +70,8 @@ function ConfirmScaleDialog({ campaign, onConfirm, onCancel }) {
   const [pct, setPct] = useState(String(campaign.safeScaleRange?.min ?? 15));
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-bg-card border border-border rounded-xl shadow-2xl max-w-sm w-full p-6 space-y-4">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50">
+      <div className="bg-bg-card border border-border rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-sm p-6 space-y-4">
         <h3 className="text-base font-semibold text-text-primary">Scale Campaign Budget</h3>
         <p className="text-sm text-text-secondary">
           Increase <span className="text-text-primary font-medium">{campaign.campaignName}</span> budget by:

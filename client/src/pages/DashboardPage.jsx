@@ -201,7 +201,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── TOP ROW: Live Status Cards ──────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {loadingOverview ? (
           [...Array(4)].map((_, i) => <div key={i} className="skeleton h-28 rounded-xl" />)
         ) : (
@@ -245,7 +245,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── MIDDLE ROW: Quick Actions ───────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <ActionCard
           icon={Shield}
           iconBg="bg-cyan-500/10"

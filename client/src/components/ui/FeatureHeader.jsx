@@ -68,7 +68,7 @@ export default function FeatureHeader({
 
       <div className="relative px-6 pt-6 pb-5">
         {/* Top row: icon + text + badge + actions */}
-        <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div className="flex items-center gap-4">
             {/* Feature icon with glow ring */}
             {Icon && (
@@ -107,7 +107,7 @@ export default function FeatureHeader({
 
           {/* Action buttons */}
           {actions.length > 0 && (
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 sm:shrink-0">
               {actions.map((action, i) => (
                 <button
                   key={i}

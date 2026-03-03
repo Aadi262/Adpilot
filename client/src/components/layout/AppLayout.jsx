@@ -14,7 +14,7 @@ export default function AppLayout() {
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <TopBar onMenuClick={() => setSidebarOpen(true)} />
         {/* key={pathname} remounts Outlet on route change, triggering page-enter animation */}
-        <main key={location.pathname} className="flex-1 overflow-y-auto p-6 page-enter">
+        <main key={location.pathname} className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 page-enter">
           <Outlet />
         </main>
       </div>
