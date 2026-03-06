@@ -26,11 +26,15 @@ const updateAdSchema = z.object({
   platform:    z.enum(PLATFORMS).optional(),
   status:      z.enum(STATUSES).optional(),
 }).strict();
+const GOALS = ['awareness', 'traffic', 'conversions', 'leads', 'sales', 'engagement'];
 const generateAdSchema = z.object({
-  tone:          z.string().max(100).optional(),
+  keyword:        z.string().min(2).max(200).optional(),
+  platform:       z.string().max(50).optional(),
+  goal:           z.string().max(50).optional(),
+  tone:           z.string().max(100).optional(),
   targetAudience: z.string().max(500).optional(),
-  productName:   z.string().max(255).optional(),
-  uniqueValue:   z.string().max(500).optional(),
-  count:         z.coerce.number().int().min(1).max(5).optional().default(3),
-}).strict();
+  productName:    z.string().max(255).optional(),
+  uniqueValue:    z.string().max(500).optional(),
+  count:          z.coerce.number().int().min(1).max(5).optional().default(3),
+});
 module.exports = { createAdSchema, updateAdSchema, generateAdSchema };

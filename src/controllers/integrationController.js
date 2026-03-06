@@ -50,3 +50,38 @@ exports.syncData = async (req, res, next) => {
     return success(res, { provider, jobId: job.id, message: 'Sync job queued' });
   } catch (err) { next(err); }
 };
+
+// GET /api/v1/integrations/status — which API keys are configured
+exports.getStatus = async (req, res, next) => {
+  try {
+    const e = process.env;
+    return res.json({
+      success: true,
+      data: {
+        ai: {
+          anthropic:   !!e.ANTHROPIC_API_KEY,
+          gemini:      !!e.GEMINI_API_KEY,
+          openai:      !!e.OPENAI_API_KEY,
+          groq:        !!e.GROQ_API_KEY,
+          huggingface: !!e.HUGGINGFACE_API_KEY,
+          ollama:      !!e.OLLAMA_URL,
+        },
+        adPlatforms: {
+          meta:   !!e.META_ACCESS_TOKEN,
+          google: !!e.GOOGLE_ADS_DEVELOPER_TOKEN,
+          ga4:    !!e.GA4_MEASUREMENT_ID,
+        },
+        seo: {
+          valueserp: !!e.VALUESERP_API_KEY,
+        },
+        missing: [
+          !e.META_ACCESS_TOKEN             && 'META_ACCESS_TOKEN',
+          !e.GOOGLE_ADS_DEVELOPER_TOKEN    && 'GOOGLE_ADS_DEVELOPER_TOKEN',
+          !e.GA4_MEASUREMENT_ID            && 'GA4_MEASUREMENT_ID',
+        ].filter(Boolean),
+      },
+      error: null,
+      meta: { timestamp: new Date().toISOString() },
+    });
+  } catch (err) { next(err); }
+};

@@ -7,6 +7,7 @@ const ctrl = require('../controllers/integrationController');
 const router = express.Router();
 router.use(authenticate);
 
+router.get('/status',                     ctrl.getStatus);      // which AI/ad keys are present
 router.get('/',                           ctrl.listProviders);
 router.post('/:provider/connect',         requireRole('admin'), ctrl.connect);
 router.delete('/:provider/disconnect',    requireRole('admin'), ctrl.disconnect);

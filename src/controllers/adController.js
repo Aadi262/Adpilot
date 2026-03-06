@@ -1,6 +1,7 @@
 'use strict';
 
-const adService = require('../services/adService');
+const adService      = require('../services/adService');
+const adsOrchestrator = require('../orchestrators/adsOrchestrator');
 
 async function list(req, res, next) {
   try {
@@ -40,12 +41,16 @@ async function remove(req, res, next) {
 
 async function generate(req, res, next) {
   try {
-    const variations = await adService.generateAdWithAI(
+    const result = await adsOrchestrator.generate(
       req.params.campaignId,
       req.body,
       req.user.teamId
     );
-    return res.status(200).json({ success: true, data: { variations } });
+    return res.status(200).json({
+      success: true,
+      data:    result,
+      meta:    { cached: result._cached },
+    });
   } catch (err) {
     next(err);
   }

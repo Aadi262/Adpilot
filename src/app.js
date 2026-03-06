@@ -10,10 +10,11 @@ const cors    = require('cors');
 const Sentry  = require('@sentry/node');
 
 // Infrastructure
-const correlationId    = require('./middleware/correlationId');
-const sanitize         = require('./middleware/sanitize');
-const { apiLimiter }   = require('./middleware/rateLimiter');
-const { errorHandler } = require('./middleware/errorHandler');
+const correlationId      = require('./middleware/correlationId');
+const sanitize           = require('./middleware/sanitize');
+const { apiLimiter }     = require('./middleware/rateLimiter');
+const { errorHandler }   = require('./middleware/errorHandler');
+const { timingMiddleware } = require('./middleware/timing');
 const logger           = require('./config/logger');
 const prisma           = require('./config/prisma');
 const { getRedis }     = require('./config/redis');
@@ -36,6 +37,7 @@ const researchRoutes          = require('./routes/researchRoutes');
 const competitorRoutes        = require('./routes/competitorRoutes');
 const scalingRoutes           = require('./routes/scalingRoutes');
 const monitorRoutes           = require('./routes/monitorRoutes');
+const pulseRoutes             = require('./routes/pulseRoutes');
 
 const app = express();
 
@@ -113,6 +115,9 @@ app.use(sanitize);
 // ── Global rate limiter ───────────────────────────────────────────────────────
 // trust proxy must be set BEFORE this middleware runs
 app.use('/api', apiLimiter);
+
+// ── Response timing (injects responseTime into every JSON response) ──────────
+app.use('/api', timingMiddleware);
 
 // ── Request logger ────────────────────────────────────────────────────────────
 app.use((req, res, next) => {
@@ -270,6 +275,7 @@ app.use('/api/v1/budget-ai',     budgetProtectionRoutes);
 app.use('/api/v1/research',      researchRoutes);
 app.use('/api/v1/competitors',   competitorRoutes);
 app.use('/api/v1/scaling',       scalingRoutes);
+app.use('/api/v1/pulse',         pulseRoutes);
 
 // ── Serve React app in production ────────────────────────────────────────────
 if (process.env.NODE_ENV === 'production') {

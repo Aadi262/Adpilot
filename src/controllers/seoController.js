@@ -496,3 +496,26 @@ exports.deleteBrief = async (req, res, next) => {
     return res.status(204).end();
   } catch (err) { next(err); }
 };
+
+// ── Keyword Research ──────────────────────────────────────────────────────────
+
+const keywordResearchService = require('../services/seo/KeywordResearchService');
+const cache                  = require('../cache');
+
+exports.researchKeyword = async (req, res, next) => {
+  try {
+    const q = (req.query.q || '').trim();
+    if (!q || q.length < 2) {
+      return res.status(400).json({ success: false, error: { message: 'q must be at least 2 characters' } });
+    }
+
+    const cacheKey = `kw:research:${q.toLowerCase()}`;
+    const { data, cached } = await cache.getOrSet(
+      cacheKey,
+      () => keywordResearchService.research(q),
+      60 * 120  // 2-hour cache
+    );
+
+    return success(res, { ...data, _cached: cached });
+  } catch (err) { next(err); }
+};

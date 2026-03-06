@@ -76,3 +76,15 @@ exports.hijackAnalysis = async (req, res, next) => {
     next(err);
   }
 };
+
+// POST /api/v1/competitors/analyze   { url: "https://competitor.com" }
+exports.analyzeUrl = async (req, res, next) => {
+  try {
+    const { url } = req.body;
+    if (!url) throw AppError.badRequest('url is required');
+
+    const clean = url.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].trim();
+    const analysis = await competitorHijackService.analyzeCompetitor(clean, req.user.teamId);
+    return success(res, analysis);
+  } catch (err) { next(err); }
+};

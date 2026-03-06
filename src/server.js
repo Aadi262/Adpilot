@@ -119,6 +119,13 @@ async function start() {
     });
     process.exit(1);
   }
+
+  // 5. Pulse cron (every 15 min — non-fatal if fails)
+  try {
+    require('./services/pulse/PulseService').startCron();
+  } catch (err) {
+    logger.warn('PulseService cron start failed (non-fatal)', { message: err.message });
+  }
 }
 
 // ─── Graceful shutdown ────────────────────────────────────────────────────

@@ -108,10 +108,10 @@ class AnthropicService {
     return null;
   }
 
-  async generateAds({ product, targetAudience, platform, tone, campaignObjective }) {
+  async generateAds({ product, keyword, targetAudience, platform, tone, campaignObjective }) {
     const prompt = `You are an expert ad copywriter. Generate exactly 3 ad variations as a JSON array.
 
-Product/Service: ${product}
+Product/Service: ${product}${keyword ? `\nFocus Keyword: ${keyword}` : ''}
 Target Audience: ${targetAudience}
 Platform: ${platform || 'Meta + Google'}
 Tone: ${tone || 'professional but engaging'}

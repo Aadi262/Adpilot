@@ -31,6 +31,9 @@ router.post('/keywords/discover-from-audit',   ctrl.discoverFromAudit);
 router.delete('/keywords/:id',                 ctrl.deleteKeyword);
 router.get('/keywords/:id/history',            ctrl.getKeywordHistory);
 
+// ── Keyword Research (free, no-key sources) ────────────────────────────────
+router.get('/keywords/research',               ctrl.researchKeyword);
+
 // ── Competitor Gap ─────────────────────────────────────────────────────────
 router.get('/gaps',   ctrl.getCompetitorGaps);
 

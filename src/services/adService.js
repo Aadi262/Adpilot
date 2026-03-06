@@ -7,6 +7,10 @@ const gemini      = require('./ai/GeminiService');
 const ollama      = require('./ai/OllamaService');
 const huggingface = require('./ai/HuggingFaceService');
 const anthropic   = require('./ai/AnthropicService');
+const { withTimeout } = require('../utils/timeout');
+
+// Per-provider timeouts — Ollama is local but can be slow on first token
+const TIMEOUT_MS = { ollama: 8000, gemini: 12000, huggingface: 12000, anthropic: 10000 };
 
 async function getAdsByCampaign(campaignId, teamId) {
   // Verify campaign belongs to team
@@ -45,11 +49,12 @@ async function generateAdWithAI(campaignId, brief, teamId) {
   }
 
   const adParams = {
-    product:           brief.productName || campaign.name,
+    product:           brief.productName || brief.keyword || campaign.name,
+    keyword:           brief.keyword,
     targetAudience:    brief.targetAudience || 'general audience',
     platform:          brief.platform || campaign.platform,
     tone:              brief.tone,
-    campaignObjective: brief.objective || campaign.objective,
+    campaignObjective: brief.goal || brief.objective || campaign.objective,
   };
 
   const toVariations = (aiResult, source) =>
@@ -68,27 +73,34 @@ async function generateAdWithAI(campaignId, brief, teamId) {
         }))
       : null;
 
-  // 1. Try Ollama (local, free, no API key)
-  if (await ollama.isAvailable()) {
-    const result = toVariations(await ollama.generateAds(adParams), 'ollama');
+  // Helper: call a provider with timeout — returns null on timeout/error
+  const tryProvider = async (label, fn) => {
+    try {
+      return toVariations(await withTimeout(fn(), TIMEOUT_MS[label] || 10000), label);
+    } catch { return null; }
+  };
+
+  // 1. Try Anthropic Claude first (most reliable, has key)
+  if (anthropic.isAvailable) {
+    const result = await tryProvider('anthropic', () => anthropic.generateAds(adParams));
     if (result) return result;
   }
 
   // 2. Try Gemini (free key)
   if (gemini.isAvailable) {
-    const result = toVariations(await gemini.generateAds(adParams), 'gemini');
+    const result = await tryProvider('gemini', () => gemini.generateAds(adParams));
     if (result) return result;
   }
 
-  // 3. Try HuggingFace (free key, Mistral-7B)
+  // 3. Try Ollama (local — slow on first token, 8s timeout)
+  if (await ollama.isAvailable()) {
+    const result = await tryProvider('ollama', () => ollama.generateAds(adParams));
+    if (result) return result;
+  }
+
+  // 4. Try HuggingFace (free key, Mistral-7B)
   if (huggingface.isAvailable) {
-    const result = toVariations(await huggingface.generateAds(adParams), 'huggingface');
-    if (result) return result;
-  }
-
-  // 4. Try Anthropic Claude (paid key, very reliable)
-  if (anthropic.isAvailable) {
-    const result = toVariations(await anthropic.generateAds(adParams), 'anthropic');
+    const result = await tryProvider('huggingface', () => huggingface.generateAds(adParams));
     if (result) return result;
   }
 
