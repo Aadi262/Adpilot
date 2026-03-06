@@ -271,6 +271,13 @@ app.use('/api/v1/research',      researchRoutes);
 app.use('/api/v1/competitors',   competitorRoutes);
 app.use('/api/v1/scaling',       scalingRoutes);
 
+// ── Serve React app in production ────────────────────────────────────────────
+if (process.env.NODE_ENV === 'production') {
+  const clientDist = path.join(__dirname, '..', 'client', 'dist');
+  app.use(express.static(clientDist));
+  app.get('*', (req, res) => res.sendFile(path.join(clientDist, 'index.html')));
+}
+
 // ── 404 ───────────────────────────────────────────────────────────────────────
 app.use((req, res) => {
   logger.warn('404 not found', {

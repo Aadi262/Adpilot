@@ -6,6 +6,7 @@ const { AppError } = require('../middleware/errorHandler');
 const gemini      = require('./ai/GeminiService');
 const ollama      = require('./ai/OllamaService');
 const huggingface = require('./ai/HuggingFaceService');
+const anthropic   = require('./ai/AnthropicService');
 
 async function getAdsByCampaign(campaignId, teamId) {
   // Verify campaign belongs to team
@@ -82,6 +83,12 @@ async function generateAdWithAI(campaignId, brief, teamId) {
   // 3. Try HuggingFace (free key, Mistral-7B)
   if (huggingface.isAvailable) {
     const result = toVariations(await huggingface.generateAds(adParams), 'huggingface');
+    if (result) return result;
+  }
+
+  // 4. Try Anthropic Claude (paid key, very reliable)
+  if (anthropic.isAvailable) {
+    const result = toVariations(await anthropic.generateAds(adParams), 'anthropic');
     if (result) return result;
   }
 

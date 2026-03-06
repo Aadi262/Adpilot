@@ -5,6 +5,7 @@ const CompetitorAnalyzer = require('./CompetitorAnalyzer');
 const gemini             = require('./GeminiService');
 const ollama             = require('./OllamaService');
 const huggingface        = require('./HuggingFaceService');
+const anthropic          = require('./AnthropicService');
 
 class CompetitorHijackService {
   /**
@@ -57,6 +58,11 @@ class CompetitorHijackService {
       // 3. Try HuggingFace (free key, Mistral-7B)
       if (!aiInsights && huggingface.isAvailable) {
         aiInsights = await huggingface.analyzeCompetitor(aiParams);
+      }
+
+      // 4. Try Anthropic Claude (paid key, reliable)
+      if (!aiInsights && anthropic.isAvailable) {
+        aiInsights = await anthropic.analyzeCompetitor(aiParams);
       }
 
       // Build keyword gaps from crawl data (real keywords found on their site)

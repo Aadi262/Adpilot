@@ -537,10 +537,27 @@ Stage 9 (Deploy):      ░░░░░░░░░░    0%
 
 ## 6. Next Actions
 
-**Priority 1:** Set `OPENAI_API_KEY` + test Generate Ads feature (Ad Studio → Generate tab)
+### Phase M — API Verification + Bug Fixes ✅ Complete (2026-03-06)
+
+**Bug fixed:** `src/middleware/validateZod.js` — `result.error.errors` was `undefined` in this Zod version (uses `result.error.issues`). Was causing 500 Internal Server Error on any strict-schema validation failure (ad generation, etc). Fixed to `result.error.issues ?? result.error.errors ?? []`.
+
+**AnthropicService added:** `src/services/ai/AnthropicService.js` — Claude Haiku-4.5 integration for ad generation, content briefs, competitor analysis. Fourth in fallback chain (Ollama → Gemini → HuggingFace → Anthropic).
+
+**All APIs verified real (no mock):**
+| API | Source | Mock |
+|-----|--------|------|
+| Ad Generation `/campaigns/:id/ads/generate` | Ollama (local) | No |
+| Content Brief `/seo/briefs` | Gemini (free) | No |
+| Competitor Analysis `/research/hijack-analysis` | Real Puppeteer crawl + AI | No |
+| Budget Protection `/budget-ai/scan` | Real BudgetGuardian | No |
+| Scaling Predictor `/scaling/all-campaigns` | Real ScalingAnalyzer | No |
+| All read endpoints (keywords, audits, rules, team, etc.) | DB | — |
+
+**AI Cost:** Ollama runs first (free local), then Gemini (free tier), then HuggingFace (free), Anthropic only as last resort. SEO summaries use Claude directly (~$0.001 each). Set `SEO_SUMMARY_ENABLED=false` to disable.
+
+**Priority 1:** Stripe integration for billing (Phase E3) — Starter $49/mo, Pro $149/mo, Business $399/mo
 **Priority 2:** Set Meta Ads credentials + test real campaign sync (Integrations → Meta)
-**Priority 3:** Stripe integration for billing (Phase E3) — Starter $49/mo, Pro $149/mo, Business $399/mo
-**Priority 4:** Deploy to production (Railway + Vercel) — all env vars needed: DATABASE_URL, REDIS_URL, JWT_SECRET, JWT_REFRESH_SECRET, ANTHROPIC_API_KEY, ENCRYPTION_KEY
+**Priority 3:** Deploy to production (Railway + Vercel) — all env vars needed: DATABASE_URL, REDIS_URL, JWT_SECRET, JWT_REFRESH_SECRET, ANTHROPIC_API_KEY, ENCRYPTION_KEY
 
 ---
 

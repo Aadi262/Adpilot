@@ -8,6 +8,7 @@ const config   = require('../../config');
 const gemini      = require('../ai/GeminiService');
 const ollama      = require('../ai/OllamaService');
 const huggingface = require('../ai/HuggingFaceService');
+const anthropic   = require('../ai/AnthropicService');
 
 const TfIdf     = natural.TfIdf;
 const tokenizer = new natural.WordTokenizer();
@@ -54,6 +55,11 @@ class ContentBriefService {
     // 4. HuggingFace (free key, Mistral-7B)
     if (!aiResult && huggingface.isAvailable) {
       aiResult = await this._generateWithHuggingFace(teamId, targetKeyword);
+    }
+
+    // 5. Anthropic Claude (paid key, very reliable fallback)
+    if (!aiResult && anthropic.isAvailable) {
+      aiResult = await this._generateWithAnthropic(teamId, targetKeyword);
     }
 
     if (aiResult) {
@@ -187,6 +193,29 @@ Return ONLY the JSON object, no markdown, no extra text.`;
       return result;
     } catch (err) {
       logger.warn('ContentBriefService: Gemini generation failed — using fallback', { err: err.message });
+      return null;
+    }
+  }
+
+  /**
+   * Generate brief via Anthropic Claude (reliable paid-key fallback).
+   */
+  async _generateWithAnthropic(teamId, targetKeyword) {
+    try {
+      const relatedKeywords = await prisma.keyword.findMany({
+        where:  { teamId },
+        select: { keyword: true },
+        take:   12,
+      });
+      const result = await anthropic.generateContentBrief({
+        keyword:         targetKeyword,
+        relatedKeywords: relatedKeywords.map(k => k.keyword),
+      });
+      if (!result || !result.title || !Array.isArray(result.outline)) return null;
+      if (!SEARCH_INTENTS.includes(result.searchIntent)) result.searchIntent = 'informational';
+      return { ...result, _source: 'anthropic' };
+    } catch (err) {
+      logger.warn('ContentBriefService: Anthropic generation failed', { err: err.message });
       return null;
     }
   }

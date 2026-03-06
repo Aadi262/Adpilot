@@ -18,7 +18,8 @@ function validateZod(schema, target = 'body') {
     const result = schema.safeParse(req[target]);
 
     if (!result.success) {
-      const message = result.error.errors
+      const issues = result.error.issues ?? result.error.errors ?? [];
+      const message = issues
         .map((e) => `${e.path.join('.') || 'body'}: ${e.message}`)
         .join('; ');
       return failure(res, message, 422, 'VALIDATION_ERROR');
