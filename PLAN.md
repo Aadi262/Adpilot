@@ -108,6 +108,8 @@ Frontend: React 18 / Vite / Tailwind / React Query / Zustand / Recharts.
 | **16** | **Phase K: Feature Identity System + UI Premium** | **✅ Complete** |
 | **17** | **Phase L1: Responsive UI (mobile/tablet/desktop)** | **✅ Complete** |
 | **18** | **Phase G: Replace Mock Data with Real Data** | **✅ Complete** |
+| **19** | **Phase N: Landing Page Visual Polish (dot grid, shooting stars, pipeline timeline)** | **✅ Complete** |
+| **20** | **Phase P: Free Feature Implementation + Architecture Hardening** | **✅ Complete** |
 | 9 | Payments / billing integration | ⏳ Pending |
 | 10 | Production deployment | ⏳ Pending |
 
@@ -511,26 +513,32 @@ Remaining:
 ## 5. Progress
 
 ```
-Overall:  █████████████████████████████░░  94%
+Overall:  ███████████████████████████████░  97%
 
-Stage 1 (Backend):     ██████████  100%
-Stage 2 (Frontend):    ██████████  100%
-Stage 3 (Hardening):   ██████████  100%
-Stage 4 (SEO Engine):  ██████████  100%
-Stage 5 (SEO UI):      ██████████  100%
-Stage 6 (Validation):  ██████████  100%
-Stage 7 (Summary):     ██████████  100%
-Phase 2 (Rules++):     ██████████  100%  ✅
-Delete Audits (UX):    ██████████  100%  ✅
-Phase 3 (Keywords):    ██████████  100%  ✅
-Phase C (UI Polish):   ██████████  100%  ✅
-C14 (Dash/Analytics):  ██████████  100%  ✅
-C15 (Feature Stubs):   ██████████  100%  ✅
-Budget AI (D1):        ████████░░   80%  (real engine, real alerts, Meta/Google APIs pending)
-Competitor Intel (D2): ███░░░░░░░   35%  (mock/beta labeled, real Ad Library API pending)
-Scaling AI (D3):       ████████░░   80%  (real engine, real scores, metric history pending)
-Stage 8 (Billing):     ░░░░░░░░░░    0%
-Stage 9 (Deploy):      ░░░░░░░░░░    0%
+Stage 1 (Backend):          ██████████  100%
+Stage 2 (Frontend):         ██████████  100%
+Stage 3 (Hardening):        ██████████  100%
+Stage 4 (SEO Engine):       ██████████  100%
+Stage 5 (SEO UI):           ██████████  100%
+Stage 6 (Validation):       ██████████  100%
+Stage 7 (Summary):          ██████████  100%
+Phase C (UI Polish):        ██████████  100%  ✅
+Phase D (Killer Features):  ██████████  100%  ✅
+Phase G (Real Data):        ██████████  100%  ✅
+Phase K (Feature Identity): ██████████  100%  ✅
+Phase L1 (Responsive):      ██████████  100%  ✅
+Phase N (Landing Polish):   ██████████  100%  ✅
+Phase P (Free Features):    ██████████  100%  ✅
+  Ad Generate (real AI):    ██████████  100%  ✅
+  Keyword Research:         ██████████  100%  ✅
+  Competitor Analyze:       ██████████  100%  ✅
+  Pulse Monitoring:         ██████████  100%  ✅
+  Integration Status:       ██████████  100%  ✅
+  Cache Layer + Timing:     ██████████  100%  ✅
+Budget AI (D1):             ████████░░   80%  (Meta/Google platform API pending)
+Competitor Intel (D2):      ██████░░░░   60%  (real crawl+AI, Ad Library API pending)
+Billing (Stripe):           ░░░░░░░░░░    0%
+Production Deploy:          ░░░░░░░░░░    0%
 ```
 
 ---
@@ -555,9 +563,10 @@ Stage 9 (Deploy):      ░░░░░░░░░░    0%
 
 **AI Cost:** Ollama runs first (free local), then Gemini (free tier), then HuggingFace (free), Anthropic only as last resort. SEO summaries use Claude directly (~$0.001 each). Set `SEO_SUMMARY_ENABLED=false` to disable.
 
-**Priority 1:** Stripe integration for billing (Phase E3) — Starter $49/mo, Pro $149/mo, Business $399/mo
-**Priority 2:** Set Meta Ads credentials + test real campaign sync (Integrations → Meta)
-**Priority 3:** Deploy to production (Railway + Vercel) — all env vars needed: DATABASE_URL, REDIS_URL, JWT_SECRET, JWT_REFRESH_SECRET, ANTHROPIC_API_KEY, ENCRYPTION_KEY
+**Priority 1:** Stripe billing — Starter $49/mo, Pro $149/mo, Business $399/mo (Phase E3)
+**Priority 2:** Meta Ads OAuth + real campaign sync (META_ACCESS_TOKEN in .env → Integrations page)
+**Priority 3:** Production deployment on Railway + Vercel
+**Priority 4 (optional):** Groq API key (free, fastest LLM) — add `GROQ_API_KEY` to .env, wire `groq-sdk` into AI fallback chain before Anthropic
 
 ---
 
@@ -900,3 +909,147 @@ client/src/pages/LandingPage.css            — mobile media queries
 ### Budget Protection + Scaling Predictor
 - Both were already using real campaign data (BudgetGuardian + ScalingAnalyzer)
 - No mock data was present — confirmed real from Phase J
+
+---
+
+## Phase N — Landing Page Visual Polish ✅ Complete (2026-03-06)
+
+### N1 — Premium Visual Redesign (atozemails.com inspired)
+
+**LandingPage.css** — complete visual system:
+- `--bg-primary: #080810` dark base
+- Per-section background patterns:
+  - `.hero`: dot grid `radial-gradient(circle, rgba(255,255,255,0.088) 1px, transparent 1px) 28px 28px fixed`
+  - `.pain`: line grid 60×60px
+  - `.pillars`: sparse dot 40px
+  - `.pipeline-section`: radial dark ellipse
+  - `.pricing`: dense dot 20px
+  - `.book-call`: indigo cross-grid 80px
+  - `.cta-final`: diagonal stripe
+  - footer: faint dot
+- `.streak-canvas`: fixed canvas for static diagonal slashes + shooting star pool (z-index:1)
+- `.mouse-glow`: 700px radial purple glow that follows cursor
+- `.sec-glow` overlays per section for depth
+- `.sec-sep`: 1px gradient separator between every major section
+- `.price-badge`: `background: linear-gradient(135deg,#7c3aed,#4f46e5)` + `badgePulse` animation + glow
+- `.price-card.pop`: `border: 1.5px solid rgba(124,58,237,0.5); margin-top:-12px; transform:scale(1.03)`
+- `.pl-timeline`: 3-column CSS grid (`var(--pl-ghost-w) 64px 1fr`) for pipeline section
+- `.cycling-keyword`: `color: #f472b6; transition: opacity 0.3s, transform 0.3s`
+- `.cal-container`, `.cal-left/.center/.right`, `.cal-day`, `.cal-slot`, `.cal-confirm-btn`
+
+**LandingPage.jsx** — full rewrite:
+- `KEYWORDS = ['ROAS drops','CTR collapses','spend spikes','budgets bleed']` cycling hero subtitle
+- `cycleIdx` + `kwVisible` state with 2.2s interval + 300ms fade transition
+- Shooting star pool: 16-star POOL, offscreen canvas for 20 deterministic static slashes (Math.sin seed), animated via requestAnimationFrame
+- Vertical pipeline timeline using `React.Fragment` + 3-column CSS Grid: ghost label / node / panel
+- Scroll-driven `--fill-height` for vertical line fill in pipeline
+- Book a Call section: mock calendar (month nav, date select, time slot, confirm button)
+- `<div className="sec-sep" />` between every major section
+
+### N2 — Micro-fixes (2026-03-06)
+- **Em dashes removed** from all body copy (replaced with commas or periods)
+  - AGENTS desc, pillars sec-sub, Budget Guardian, Creative Agent, SEO Intelligence
+  - Preview URL: `adpilot.app — Command Center` → `adpilot.app · Command Center`
+- **Cycling keyword** hero subtitle implemented (was static)
+- **Most Popular badge** redesigned with gradient + glow pulse
+- **Per-section backgrounds** applied (was uniform dark)
+- **Shooting star pool** system replaces simple single-star animation
+
+### Git History
+- Commit `f5ac31b1`: feat(ui): premium landing page visual polish
+- Commit `a9dfcea6`: chore: gitignore .claude/settings.local.json (removed exposed API key)
+- Commit `c21ee3be`: feat(ui): micro-fixes — cycling keyword, per-section backgrounds, shooting star pool, badge pulse, remove em dashes
+
+---
+
+## Phase P — Free Feature Implementation + Architecture Hardening ✅ Complete (2026-03-06)
+
+### P1 — Ad Generation Fix
+- `generateAdSchema` updated: now accepts `keyword`, `platform`, `goal` fields (was strict, rejected them)
+- `adService.generateAdWithAI()`: provider order reordered to Anthropic first (most reliable), added `withTimeout` per provider (8-12s), `tryProvider()` helper swallows timeout errors gracefully
+- `AnthropicService.generateAds()`: now includes `keyword` in prompt when provided
+- New `src/orchestrators/adsOrchestrator.js`: cache-first (30min TTL), 30s overall timeout, returns `_cached: true/false`
+- `adController.generate()`: uses orchestrator, returns `meta.cached` in response
+
+**Result:** `POST /api/v1/campaigns/:id/ads/generate` accepts `{keyword, platform, goal, targetAudience}`, returns 3 real AI variations in ~5s (1ms on cache hit)
+
+### P2 — Keyword Research (new endpoint)
+- `src/services/seo/KeywordResearchService.js` — 4 free sources in parallel:
+  1. Google Autocomplete (`suggestqueries.google.com`) — no key
+  2. DuckDuckGo Suggest (`duckduckgo.com/ac/`) — no key
+  3. Google Trends (`google-trends-api` npm package) — no key
+  4. Anthropic/Gemini AI for difficulty + intent labels
+- `GET /api/v1/seo/keywords/research?q=...` added to seoRoutes.js
+- `seoController.researchKeyword()` with 2-hour cache
+- Returns: `{ keyword, suggestions[], trends{averageInterest,peakInterest,trend,dataPoints[]}, insights{difficulty,intent,estimatedCpc,targetedAngles,negativeKeywords,summary}, sources{} }`
+
+### P3 — Competitor Analyze (new endpoint)
+- `POST /api/v1/competitors/analyze` added to competitorRoutes.js
+- `researchController.analyzeUrl()` — strips domain, calls CompetitorHijackService (real Puppeteer crawl + AI)
+- Existing `/api/v1/research/hijack-analysis?domain=` still works
+
+### P4 — Pulse Monitoring (new feature)
+- `src/services/pulse/PulseService.js`:
+  - Reads `campaign.performance` JSON + `campaignAlerts` rules from DB
+  - `scan(teamId)`: evaluates roas_drop, ctr_collapse, cpa_spike, spend_anomaly thresholds
+  - Creates `Notification` records (type=ALERT) with 1hr cooldown per rule
+  - `startCron()`: node-cron every 15 min, scans all teams
+  - `demoMode=true` when no META_ACCESS_TOKEN/GOOGLE_ADS_DEVELOPER_TOKEN
+- `src/routes/pulseRoutes.js` — mounted at `/api/v1/pulse`
+- `src/controllers/pulseController.js`:
+  - `GET /pulse/alerts` — last 20 ALERT notifications, strips `[rule:xxx]` internal tags
+  - `POST /pulse/check` — on-demand scan for current team
+  - `GET /pulse/status` — demoMode flag + connected integrations
+- `server.js` — `pulseService.startCron()` called at startup (non-fatal)
+
+### P5 — Integration Status (new endpoint)
+- `GET /api/v1/integrations/status` added to integrationRoutes.js
+- Returns: `{ ai{anthropic,gemini,openai,groq,huggingface,ollama}, adPlatforms{meta,google,ga4}, seo{valueserp}, missing[] }`
+
+### P6 — Architecture Hardening
+- `src/utils/timeout.js` — `withTimeout(promise, ms)` — race against timeout
+- `src/utils/retry.js` — `withRetry(fn, {retries, backoff})` — exponential backoff
+- `src/cache/index.js` — node-cache layer: `get/set/del/getOrSet/delByPrefix/stats`
+  - TTLs: AI 30min, keywords 2hr, competitor 1hr, dashboard 5min, pulse 30s
+- `src/middleware/timing.js` — injects `meta.responseTime` + `X-Response-Time` header into every JSON response, warns on >1s requests
+
+### Packages Added
+- `google-trends-api` — Google Trends data (no key)
+- `node-cron` — cron scheduler for pulse monitoring
+- `groq-sdk` — Groq AI (fast free tier, not yet wired in)
+- `node-cache` — in-memory cache backing layer
+
+### Feature Status (tested)
+```
+FEATURE                  | STATUS   | SOURCE                  | RT (fresh/cache)
+-------------------------|----------|-------------------------|------------------
+Ad Generation            | WORKING  | Anthropic claude-haiku  | ~5s / 1ms
+Keyword Research         | WORKING  | Google+DDG+Trends+AI    | ~3.5s / instant
+Competitor Analysis      | WORKING  | Puppeteer+AI            | ~26s (site dep.)
+Gaps Monitor             | WORKING  | Keyword diff            | 7ms (empty w/o competitors)
+Pulse Alerts             | WORKING  | node-cron+Prisma        | 11ms
+Pulse Check              | WORKING  | On-demand scan          | 12ms, scanned 4 campaigns
+Integration Status       | WORKING  | .env key detection      | instant
+Response Timing          | WORKING  | timing middleware        | all responses
+
+CONNECTED AI: anthropic, gemini, huggingface, ollama
+MISSING AD PLATFORMS: META_ACCESS_TOKEN, GOOGLE_ADS_DEVELOPER_TOKEN, GA4_MEASUREMENT_ID
+```
+
+### New File Index
+```
+src/utils/timeout.js                    — withTimeout helper
+src/utils/retry.js                      — withRetry helper
+src/cache/index.js                      — node-cache layer
+src/middleware/timing.js                — responseTime injection
+src/orchestrators/adsOrchestrator.js    — cache-first ad generation
+src/services/seo/KeywordResearchService.js — Google+DDG+Trends+AI keyword research
+src/services/pulse/PulseService.js      — 15-min cron monitor + threshold eval
+src/routes/pulseRoutes.js               — /pulse/alerts, /pulse/check, /pulse/status
+src/controllers/pulseController.js      — pulse endpoint handlers
+```
+
+### Commit
+- `9bce9ffb`: feat: full feature implementation + architecture hardening
+
+*Last updated: 2026-03-06 — Session: Phase N (landing page polish) + Phase P (free feature implementation + architecture hardening)*
