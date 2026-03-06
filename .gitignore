@@ -11,3 +11,4 @@ API_KEYS.md
 # Test/debug scripts
 test_*.js
 API_KEYS.md
+.claude/settings.local.json
