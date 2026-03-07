@@ -1117,3 +1117,54 @@ src/controllers/pulseController.js      — pulse endpoint handlers
 - `10e73dfc`: feat: premium experience sprint — health score, AI recommendations, one-click reports, bulk audit, CSV exports
 
 *Last updated: 2026-03-07 — Session: Phase Q2 Premium Experience Sprint*
+
+---
+
+## Screenshot Audit Fix Sprint ✅ Complete (2026-03-07)
+
+### Bug Fixes (7 files changed)
+
+#### API Response Shape Fixes
+- `getKeywords` was returning `paginated({items:[]})` but frontend expected array → changed to `success({keywords:[], total})`
+- `getAudits` same issue → `success({audits:[], total})`
+- `getBriefs` same issue → `success({briefs:[], total})`
+- Frontend `SeoPage.jsx` + `ResearchPage.jsx` updated to use `.keywords ?? .items ?? []` fallback pattern
+
+#### Keywords Tab — All Zeros
+- `syncRanks()` now fetches Google Trends interest score as searchVolume proxy for keywords with volume=0
+- Estimates difficulty from trend score (high→75, medium→45, low→25)
+- `opportunityScore` fixed NaN when searchVolume=0 or difficulty=0 (guard + default diff=30)
+- Frontend shows `'—'` for null rank, zero volume, and no rank-change history
+
+#### Sync Ranks Button — No Visible Effect
+- Was queuing a Bull job async (user never saw result); now runs `syncRanks()` synchronously
+- Returns `{synced: N, updates: [...], message: "Synced N keyword(s)"}` immediately
+
+#### Keyword Research — No Results
+- Service returns nested `{trends:{averageInterest, trend, dataPoints}, insights:{difficulty, summary}}`
+- Controller now normalizes to flat shape: `{trendScore, trend, trendHistory:[{label,score}], difficulty, aiInsight, bestPlatform, suggestions}`
+- Google Trends single-word query retry: appends " online" if first attempt returns empty
+- Frontend `KeywordResearchSection` now renders trend sparkline, AI insight, suggestions
+
+#### Market Research — Only Shows Domain
+- Was reading `data.landingPageData` (never exists in API response)
+- Fixed to read `data.title`, `data.description`, `data.headings`, `data.ctas`, `data.topKeywords`, `data.techStack`, `data.messagingAngles`, `data.weaknesses`, `data.keywordGaps` directly
+- Now renders: site overview, content strategy headlines, CTAs, keyword cloud, messaging angles, weaknesses, keyword gaps
+
+#### Gaps Tab — Always Empty
+- `Competitor.topKeywords` was always `[]` because analysis results were never saved back
+- `hijackAnalysis` + `analyzeUrl` now call `_saveCompetitorKeywords()` after each analysis
+- Saves `topKeywords` as `[{keyword, rank:10}]` to the tracked Competitor record
+
+#### Content Briefs — Generic Headings
+- Fallback `_generateTitle` now deterministic (hash-based, not random) with specific year titles
+- `_generateOutline` replaces "What is X?" / "Why X Matters" with actionable year-specific headings
+- `_generateWithAnthropic` passes `instructions` param to avoid generic headings
+
+#### SEO Audit — 24hr Dedup
+- `triggerAudit` checks for completed audit for same team+URL within 24 hours
+- Returns `{auditId, cached:true, cachedAt, message}` instead of re-queuing
+- Override with `?force=1` query param
+
+### Commit
+- `e388adcf`: fix: screenshot audit — keywords data, research, market analysis, gaps, briefs
