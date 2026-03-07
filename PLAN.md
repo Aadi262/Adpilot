@@ -1168,3 +1168,46 @@ src/controllers/pulseController.js      — pulse endpoint handlers
 
 ### Commit
 - `e388adcf`: fix: screenshot audit — keywords data, research, market analysis, gaps, briefs
+
+---
+
+## Port Conflict + Railway Build Fix ✅ Complete (2026-03-08)
+
+### Root Cause: Port 3000 IPv4/IPv6 Split
+- AdPilot backend (PID from `npm run dev`) binds to IPv4 `0.0.0.0:3000`
+- linkedpilot Next.js app (separate project) was also running, binding IPv6 `:::3000`
+- macOS allows two processes to bind the same port on different IP stacks
+- Browser resolves `localhost` → `::1` (IPv6 first), so Vite proxy → linkedpilot, not AdPilot
+- Fix: `kill <linkedpilot-pid>` — always kill other Next.js servers before starting AdPilot
+- Vite frontend was not running either — started on port 5173
+
+### Port Reference
+| Service | Port | Command |
+|---------|------|---------|
+| Backend | 3000 (IPv4) | `npm run dev` (from /Adpilot root) |
+| Frontend | 5173 | `cd client && npm run dev` |
+| Postgres | 5432 | Docker |
+| Redis | 6379 | Docker |
+| Railway | Railway-injected PORT (~8080) | single server serves API + static React |
+
+**Kill port conflicts:** `lsof -i tcp:3000 -sTCP:LISTEN` — kill any non-AdPilot PIDs
+
+### Railway Dockerfile Fix
+- `prisma` CLI was in devDependencies → `npm ci --omit=dev` skipped it
+- `npx prisma generate` and `npx prisma db push` in Docker had to download prisma from npm at build/runtime (flaky)
+- Fix: moved `prisma` to production `dependencies` in package.json
+- Dockerfile now uses `node_modules/.bin/prisma` (guaranteed available)
+- Commit: `70c966d9`
+
+### Railway Env Vars Required (set in Railway dashboard)
+| Variable | Source |
+|----------|--------|
+| DATABASE_URL | Railway PostgreSQL service (auto-linked) |
+| REDIS_URL | Railway Redis service (auto-linked) |
+| JWT_SECRET | `openssl rand -hex 32` (≥32 chars) |
+| JWT_REFRESH_SECRET | `openssl rand -hex 32` (≥32 chars) |
+| ENCRYPTION_KEY | `openssl rand -hex 32` (64 hex chars) |
+| NODE_ENV | `production` |
+
+After first Railway deploy: run seed via Railway CLI or console:
+`railway run node src/scripts/seed.js`
