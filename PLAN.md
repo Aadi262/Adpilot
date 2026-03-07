@@ -513,7 +513,7 @@ Remaining:
 ## 5. Progress
 
 ```
-Overall:  ███████████████████████████████░  97%
+Overall:  ████████████████████████████████  98%
 
 Stage 1 (Backend):          ██████████  100%
 Stage 2 (Frontend):         ██████████  100%
@@ -563,9 +563,23 @@ Production Deploy:          ░░░░░░░░░░    0%
 
 **AI Cost:** Ollama runs first (free local), then Gemini (free tier), then HuggingFace (free), Anthropic only as last resort. SEO summaries use Claude directly (~$0.001 each). Set `SEO_SUMMARY_ENABLED=false` to disable.
 
+### Phase Q — Full Fix Sprint ✅ Complete (2026-03-07)
+
+**Railway deployment fixed:** `.dockerignore` was blocking `client/` from Docker build context (line 2 was `client`). Changed to `client/node_modules`. Dockerfile 2-stage build now works: Stage 1 builds React, Stage 2 copies `client/dist` into Express server.
+
+**Pulse auto-detection:** PulseService now has `AUTO_RULES` that fire without user-configured `campaignAlerts` rules. Fires on: ROAS < 1.0x (critical), ROAS < 2.0x (warning), CTR < 0.5% (warning), CPA > $80 (warning). Demo team fires 2 alerts from Summer Sale (ROAS 0.80x + CTR 0.30%).
+
+**Health score added to analytics overview:** `analytics/overview` now returns `health: {score, label, actionRequired}` + `actions[]` array with severity-tagged recommendations.
+
+**Ad generate without campaignId:** `POST /api/v1/ads/generate` now works without a campaign — campaign is optional, falls back to `brief.platform || 'meta'`.
+
+**Gaps message:** `CompetitorGapService.analyze()` returns `message` field explaining when 0 gaps found (no competitors tracked vs no data).
+
+**Seed data:** Summer Sale demo campaign seeded with poor metrics (ROAS 0.8x, CTR 0.3%) so pulse auto-detection always has data to fire on.
+
 **Priority 1:** Stripe billing — Starter $49/mo, Pro $149/mo, Business $399/mo (Phase E3)
 **Priority 2:** Meta Ads OAuth + real campaign sync (META_ACCESS_TOKEN in .env → Integrations page)
-**Priority 3:** Production deployment on Railway + Vercel
+**Priority 3:** Push to Railway (git push → Railway auto-deploys from main)
 **Priority 4 (optional):** Groq API key (free, fastest LLM) — add `GROQ_API_KEY` to .env, wire `groq-sdk` into AI fallback chain before Anthropic
 
 ---
@@ -1052,4 +1066,4 @@ src/controllers/pulseController.js      — pulse endpoint handlers
 ### Commit
 - `9bce9ffb`: feat: full feature implementation + architecture hardening
 
-*Last updated: 2026-03-06 — Session: Phase N (landing page polish) + Phase P (free feature implementation + architecture hardening)*
+*Last updated: 2026-03-07 — Session: Phase Q (full fix sprint: Railway deploy fix, pulse auto-detection, health score, ad generate without campaignId)*
