@@ -14,6 +14,7 @@ router.use(authenticate);
 router.get('/campaigns/:campaignId/ads', list);
 
 // Write — admin and manager only
+router.post('/ads/generate',                       requireRole('admin', 'manager'), validateZod(generateAdSchema), generate);
 router.post('/campaigns/:campaignId/ads',          requireRole('admin', 'manager'), validateZod(createAdSchema), create);
 router.post('/campaigns/:campaignId/ads/generate', requireRole('admin', 'manager'), validateZod(generateAdSchema), generate);
 router.patch('/ads/:id',                           requireRole('admin', 'manager'), validateZod(updateAdSchema), update);

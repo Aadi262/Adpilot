@@ -42,19 +42,20 @@ async function deleteAd(id) {
 }
 
 async function generateAdWithAI(campaignId, brief, teamId) {
-  // Verify campaign belongs to team
-  const campaign = await campaignRepo.findByIdRaw(campaignId, teamId);
-  if (!campaign) {
-    throw new AppError('Campaign not found', 404);
+  // Campaign lookup is optional — allows generation without a campaign context
+  let campaign = null;
+  if (campaignId) {
+    campaign = await campaignRepo.findByIdRaw(campaignId, teamId);
+    if (!campaign) throw new AppError('Campaign not found', 404);
   }
 
   const adParams = {
-    product:           brief.productName || brief.keyword || campaign.name,
+    product:           brief.productName || brief.keyword || campaign?.name || 'your product',
     keyword:           brief.keyword,
     targetAudience:    brief.targetAudience || 'general audience',
-    platform:          brief.platform || campaign.platform,
+    platform:          brief.platform || campaign?.platform || 'meta',
     tone:              brief.tone,
-    campaignObjective: brief.goal || brief.objective || campaign.objective,
+    campaignObjective: brief.goal || brief.objective || campaign?.objective,
   };
 
   const toVariations = (aiResult, source) =>
@@ -64,7 +65,7 @@ async function generateAdWithAI(campaignId, brief, teamId) {
           primaryText:   v.primaryText,
           description:   v.description,
           ctaType:       v.callToAction?.toUpperCase().replace(/\s+/g, '_') || 'LEARN_MORE',
-          platform:      campaign.platform,
+          platform:      campaign?.platform || brief.platform || 'meta',
           status:        'draft',
           qualityScore:  v.qualityScore,
           reasoning:     v.reasoning,

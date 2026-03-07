@@ -43,6 +43,26 @@ class AnalyticsAggregator {
       return s > (Number(((best || {}).performance || {}).spend) || 0) ? c : best;
     }, null);
 
+    // ── Health score (0–100) ───────────────────────────────────────────────────
+    const overallCTR = MetricsCalculator.ctr(totalClicks, totalImps);
+    const overallCPA = MetricsCalculator.cpa(totalSpend, totalConv);
+
+    let healthScore = 100;
+    const actions = [];
+
+    if (avgROAS < 1.0)  { healthScore -= 30; actions.push({ severity: 'critical', message: 'Average ROAS below 1.0x — campaigns are losing money. Pause underperformers.' }); }
+    else if (avgROAS < 2.0) { healthScore -= 15; actions.push({ severity: 'warning', message: 'Average ROAS below 2.0x. Review ad creatives and audience targeting.' }); }
+
+    if (overallCTR < 0.5) { healthScore -= 20; actions.push({ severity: 'warning', message: 'CTR is very low (< 0.5%). Refresh ad copy and creative assets.' }); }
+    else if (overallCTR < 1.0) { healthScore -= 10; actions.push({ severity: 'info', message: 'CTR below 1% — consider A/B testing headlines.' }); }
+
+    if (active === 0 && campaigns.length > 0) { healthScore -= 20; actions.push({ severity: 'warning', message: 'No active campaigns. Activate at least one campaign to start generating data.' }); }
+
+    if (overallCPA > 100) { healthScore -= 15; actions.push({ severity: 'warning', message: `High CPA ($${overallCPA}) — optimize conversion funnel or reduce bids.` }); }
+
+    healthScore = Math.max(0, Math.min(100, healthScore));
+    const healthLabel = healthScore >= 80 ? 'Healthy' : healthScore >= 60 ? 'Fair' : healthScore >= 40 ? 'Needs Attention' : 'Critical';
+
     const result = {
       totalCampaigns:  campaigns.length,
       activeCampaigns: active,
@@ -52,9 +72,15 @@ class AnalyticsAggregator {
       totalImpressions: totalImps,
       totalConversions: totalConv,
       avgROAS:         parseFloat(avgROAS.toFixed(2)),
-      overallCPA:      MetricsCalculator.cpa(totalSpend, totalConv),
-      overallCTR:      MetricsCalculator.ctr(totalClicks, totalImps),
+      overallCPA,
+      overallCTR,
       topCampaign:     topCampaign ? { id: topCampaign.id, name: topCampaign.name } : null,
+      health: {
+        score:          healthScore,
+        label:          healthLabel,
+        actionRequired: actions.some(a => a.severity === 'critical'),
+      },
+      actions,
     };
 
     try {

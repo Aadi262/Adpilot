@@ -71,10 +71,17 @@ class CompetitorGapService {
       }, {})
     );
 
+    const message = competitors.length === 0
+      ? 'No competitors tracked yet. Add competitors on the Research page to see keyword gaps.'
+      : deduped.length === 0
+        ? 'No gaps found. Your keyword coverage matches your competitors, or competitors have no top-keyword data yet. Try analyzing a competitor first.'
+        : null;
+
     return {
       gaps: deduped.sort((a, b) => (a.competitorRank - b.competitorRank)),
       opportunities: deduped.length,
       competitorsAnalyzed: competitors.length,
+      message,
     };
   }
 }

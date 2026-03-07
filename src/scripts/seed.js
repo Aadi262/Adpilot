@@ -71,7 +71,8 @@ async function seed() {
       status: 'active',
       budget: 150.00,
       budgetType: 'daily',
-      performance: { spend: 1240.50, roas: 3.8, clicks: 4200, impressions: 87000, ctr: 4.83 },
+      // Intentionally poor ROAS + low CTR to demonstrate pulse alerts
+      performance: { spend: 1240.50, roas: 0.8, clicks: 4200, impressions: 87000, ctr: 0.3, cpa: 65.2, conversions: 19 },
     },
     {
       name: 'Brand Awareness – Google',

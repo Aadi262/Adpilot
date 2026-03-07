@@ -56,6 +56,25 @@ function _evalMetrics(metrics, rules) {
   return triggered;
 }
 
+// ── Auto-detection (no user-configured rules needed) ──────────────────────────
+
+const AUTO_RULES = [
+  { id: 'auto:roas_critical', alertType: 'roas_drop',    check: m => m.roas !== null && m.roas < 1.0,  detail: m => `ROAS is ${m.roas.toFixed(2)}x — campaign is losing money (< 1.0x)` },
+  { id: 'auto:roas_low',      alertType: 'roas_drop',    check: m => m.roas !== null && m.roas < 2.0 && m.roas >= 1.0, detail: m => `ROAS is ${m.roas.toFixed(2)}x — below healthy 2.0x target` },
+  { id: 'auto:ctr_low',       alertType: 'ctr_collapse', check: m => m.ctr  !== null && m.ctr  < 0.5,  detail: m => `CTR is ${m.ctr.toFixed(2)}% — very low (< 0.5%)` },
+  { id: 'auto:cpa_high',      alertType: 'cpa_spike',    check: m => m.cpa  !== null && m.cpa  > 80,   detail: m => `CPA is $${m.cpa.toFixed(2)} — above $80 threshold` },
+];
+
+function _autoDetect(metrics) {
+  const triggered = [];
+  for (const rule of AUTO_RULES) {
+    if (rule.check(metrics)) {
+      triggered.push({ rule, detail: rule.detail(metrics) });
+    }
+  }
+  return triggered;
+}
+
 // ── Core scan ─────────────────────────────────────────────────────────────────
 
 async function scan(teamId) {
@@ -78,22 +97,28 @@ async function scan(teamId) {
 
     if (Object.values(metrics).every(v => v === null)) continue;
 
-    const triggered = _evalMetrics(metrics, campaign.campaignAlerts);
+    // Combine user-configured rules + always-on auto-detection
+    const triggered = [
+      ..._evalMetrics(metrics, campaign.campaignAlerts),
+      ..._autoDetect(metrics),
+    ];
+
+    // Fetch a valid userId for this team (required field) — once per campaign loop
+    const teamUser = await prisma.user.findFirst({ where: { teamId }, select: { id: true } });
+    if (!teamUser) continue;
 
     for (const { rule, detail } of triggered) {
-      // Avoid duplicate notifications (cooldown: 1 hour per rule)
+      const ruleKey = `[rule:${rule.id}]`;
+
+      // Avoid duplicate notifications (cooldown: 1 hour per rule per campaign)
       const recent = await prisma.notification.findFirst({
         where: {
           teamId,
-          message:   { contains: `[rule:${rule.id}]` },
+          message:   { contains: ruleKey },
           createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
         },
       });
       if (recent) continue;
-
-      // Fetch a valid userId for this team (required field)
-      const teamUser = await prisma.user.findFirst({ where: { teamId }, select: { id: true } });
-      if (!teamUser) continue;
 
       const notif = await prisma.notification.create({
         data: {
@@ -101,14 +126,16 @@ async function scan(teamId) {
           userId:  teamUser.id,
           type:    'ALERT',
           channel: 'in_app',
-          message: `${rule.alertType.toUpperCase().replace('_', ' ')} on "${campaign.name}": ${detail} [rule:${rule.id}]`,
+          message: `${rule.alertType.toUpperCase().replace(/_/g, ' ')} on "${campaign.name}": ${detail} ${ruleKey}`,
           status:  'pending',
         },
       });
 
-      // Fire-and-forget: update rule triggeredAt
-      prisma.campaignAlert.update({ where: { id: rule.id }, data: { triggeredAt: new Date() } })
-        .catch(e => logger.error('PulseService: triggeredAt update failed', { err: e.message }));
+      // Only update triggeredAt for DB-persisted rules (not auto-detection rules)
+      if (!String(rule.id).startsWith('auto:')) {
+        prisma.campaignAlert.update({ where: { id: rule.id }, data: { triggeredAt: new Date() } })
+          .catch(e => logger.error('PulseService: triggeredAt update failed', { err: e.message }));
+      }
 
       alerts.push({ notificationId: notif.id, campaign: campaign.name, detail, ruleType: rule.alertType });
     }
