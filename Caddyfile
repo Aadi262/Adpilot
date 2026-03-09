@@ -1,0 +1,8 @@
+maxleads.in {
+    reverse_proxy maxleads-nginx:80
+}
+
+:80, :443 {
+    @notMaxleads host != maxleads.in
+    reverse_proxy @notMaxleads highway-app:4000
+}

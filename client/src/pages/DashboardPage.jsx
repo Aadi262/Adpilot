@@ -191,7 +191,6 @@ function RecommendationCard({ rec }) {
         {rec.ctaUrl && (
           <button
             onClick={handleAction}
-            disabled={loading}
             style={{
               background: 'rgba(139,92,246,0.12)',
               border: '1px solid rgba(139,92,246,0.22)',
