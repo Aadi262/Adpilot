@@ -288,7 +288,7 @@ app.get('/api/v1/keywords/research', require('./middleware/auth').authenticate, 
 if (process.env.NODE_ENV === 'production') {
   const clientDist = path.join(__dirname, '..', 'client', 'dist');
   app.use(express.static(clientDist, {
-    index: false
+    index: false 
   }));
   app.get('*', (req, res, next) => {
     // Do not intercept API or asset requests
