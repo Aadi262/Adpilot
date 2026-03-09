@@ -285,9 +285,11 @@ app.get('/api/v1/keywords/research', require('./middleware/auth').authenticate, 
 
 // ── Serve React app in production ────────────────────────────────────────────
 if (process.env.NODE_ENV === 'production') {
-  const clientDist = path.join(__dirname, '..', 'client', 'dist');
+  const clientDist = path.resolve('/app/client/dist');
   app.use(express.static(clientDist));
-  app.get('*', (req, res) => res.sendFile(path.join(clientDist, 'index.html')));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
 }
 
 // ── 404 ───────────────────────────────────────────────────────────────────────

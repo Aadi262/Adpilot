@@ -1706,7 +1706,8 @@ function KeywordsTab() {
           onClose={() => setShowAddModal(false)}
           onSaved={() => {
             setShowAddModal(false);
-            queryClient.invalidateQueries({ queryKey: ['seo', 'keywords'] });
+            // Auto-sync to immediately populate volume/difficulty/opportunity
+            syncMutation.mutate();
           }}
         />
       )}
