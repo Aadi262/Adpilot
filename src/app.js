@@ -64,7 +64,8 @@ app.use(cors({
     const defaultOrigins = [
       'http://localhost:5173',
       'http://localhost:3000',
-      'http://0.0.0.0:3000'
+      'http://0.0.0.0:3000',
+      'http://194.163.146.149:3001'
     ];
     const envOrigins = process.env.ALLOWED_ORIGINS
       ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
@@ -285,9 +286,12 @@ app.get('/api/v1/keywords/research', require('./middleware/auth').authenticate, 
 
 // ── Serve React app in production ────────────────────────────────────────────
 if (process.env.NODE_ENV === 'production') {
-  const clientDist = path.resolve('/app/client/dist');
+  const clientDist = path.join(__dirname, '..', 'client', 'dist');
   app.use(express.static(clientDist));
-  app.get('*', (req, res) => {
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) {
+      return next();
+    }
     res.sendFile(path.join(clientDist, 'index.html'));
   });
 }
