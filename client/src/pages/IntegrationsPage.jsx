@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plug,
@@ -76,30 +77,78 @@ function SlackIcon({ size = 32 }) {
   );
 }
 
+// ─── Provider-specific account ID labels / hints ──────────────────────────────
+const ACCOUNT_ID_CONFIG = {
+  meta: {
+    label: 'Ad Account ID',
+    placeholder: 'e.g. 1234567890',
+    hint: 'Found in Meta Business Manager → Ad Accounts. Numbers only, no "act_" prefix.',
+    required: true,
+  },
+  google: {
+    label: 'Customer ID',
+    placeholder: 'e.g. 123-456-7890',
+    hint: 'Found in Google Ads → top-right account picker. Remove dashes if preferred.',
+    required: true,
+  },
+  slack: {
+    label: null,
+    required: false,
+  },
+};
+
 // ─── OAuth Connect Modal ──────────────────────────────────────────────────────
 function ConnectModal({ provider, onClose }) {
-  const queryClient = useQueryClient();
-  const [code, setCode] = useState('');
+  const [accountId, setAccountId]   = useState('');
+  const [errMsg, setErrMsg]         = useState('');
+  const [loading, setLoading]       = useState(false);
 
-  const mutation = useMutation({
+  const cfg        = ACCOUNT_ID_CONFIG[provider.id] || {};
+  const isOAuth    = provider.id === 'meta' || provider.id === 'google';
+
+  // ── Slack: legacy code-paste flow ────────────────────────────────────────
+  const queryClient = useQueryClient();
+  const [slackCode, setSlackCode] = useState('');
+  const slackMutation = useMutation({
     mutationFn: (data) => api.post(`/integrations/${provider.id}/connect`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['integrations'] });
       onClose();
     },
   });
-
-  const handleSubmit = (e) => {
+  const handleSlackSubmit = (e) => {
     e.preventDefault();
-    mutation.mutate({ code: code.trim() });
+    slackMutation.mutate({ code: slackCode.trim() });
   };
 
-  const errMsg = mutation.error?.response?.data?.error?.message || mutation.error?.message;
+  // ── Meta / Google: redirect-based OAuth ──────────────────────────────────
+  const handleOAuthRedirect = async () => {
+    setErrMsg('');
+    if (cfg.required && !accountId.trim()) {
+      setErrMsg(`${cfg.label} is required.`);
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await api.get(`/integrations/${provider.id}/oauth-url`);
+      const { url, redirectUri } = res.data.data;
+      sessionStorage.setItem('pendingOAuth', JSON.stringify({
+        provider:    provider.id,
+        accountId:   accountId.trim(),
+        redirectUri,
+      }));
+      window.location.href = url;
+    } catch (err) {
+      setErrMsg(err?.response?.data?.error?.message || 'Could not generate authorization URL. Check server configuration.');
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full sm:max-w-md bg-bg-card border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl">
+        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div className="flex items-center gap-3">
             <provider.icon size={28} />
@@ -110,41 +159,87 @@ function ConnectModal({ provider, onClose }) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-          <p className="text-sm text-text-secondary">
-            Enter the OAuth authorization code from {provider.name} to complete the connection.
-          </p>
+        {/* Body */}
+        {isOAuth ? (
+          <div className="px-6 py-5 space-y-4">
+            <p className="text-sm text-text-secondary">
+              You'll be redirected to {provider.name} to authorize access. After approving, you'll
+              be brought back automatically.
+            </p>
 
-          {errMsg && (
-            <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg px-3 py-2 text-sm">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{errMsg}</span>
+            {errMsg && (
+              <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg px-3 py-2 text-sm">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{errMsg}</span>
+              </div>
+            )}
+
+            {cfg.label && (
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1.5">
+                  {cfg.label} {cfg.required && <span className="text-red-400">*</span>}
+                </label>
+                <input
+                  type="text"
+                  className="input-field"
+                  placeholder={cfg.placeholder}
+                  value={accountId}
+                  onChange={(e) => setAccountId(e.target.value)}
+                  autoFocus
+                />
+                {cfg.hint && (
+                  <p className="text-xs text-text-secondary mt-1.5 leading-relaxed">{cfg.hint}</p>
+                )}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 pt-1">
+              <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
+              <button
+                onClick={handleOAuthRedirect}
+                disabled={loading}
+                className="btn-primary flex items-center gap-2"
+              >
+                <Link className="w-4 h-4" />
+                {loading ? 'Redirecting…' : `Authorize with ${provider.name}`}
+              </button>
             </div>
-          )}
-
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1.5">
-              Authorization Code
-            </label>
-            <input
-              type="text"
-              className="input-field"
-              placeholder="Paste code here…"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              required
-              autoFocus
-            />
           </div>
-
-          <div className="flex justify-end gap-3 pt-1">
-            <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
-            <button type="submit" disabled={mutation.isPending} className="btn-primary flex items-center gap-2">
-              <Link className="w-4 h-4" />
-              {mutation.isPending ? 'Connecting…' : 'Connect'}
-            </button>
-          </div>
-        </form>
+        ) : (
+          /* Slack — paste code flow */
+          <form onSubmit={handleSlackSubmit} className="px-6 py-5 space-y-4">
+            <p className="text-sm text-text-secondary">
+              Enter the OAuth authorization code from Slack to complete the connection.
+            </p>
+            {slackMutation.error && (
+              <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg px-3 py-2 text-sm">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{slackMutation.error?.response?.data?.error?.message || slackMutation.error?.message}</span>
+              </div>
+            )}
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-1.5">
+                Authorization Code
+              </label>
+              <input
+                type="text"
+                className="input-field"
+                placeholder="Paste code here…"
+                value={slackCode}
+                onChange={(e) => setSlackCode(e.target.value)}
+                required
+                autoFocus
+              />
+            </div>
+            <div className="flex justify-end gap-3 pt-1">
+              <button type="button" onClick={onClose} className="btn-secondary">Cancel</button>
+              <button type="submit" disabled={slackMutation.isPending} className="btn-primary flex items-center gap-2">
+                <Link className="w-4 h-4" />
+                {slackMutation.isPending ? 'Connecting…' : 'Connect'}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );
@@ -281,6 +376,24 @@ function SkeletonProviderCard() {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function IntegrationsPage() {
+  const location = useLocation();
+  const queryClient = useQueryClient();
+  const [successMsg, setSuccessMsg] = useState('');
+
+  // Show success banner when returning from OAuth callback
+  useEffect(() => {
+    if (location.state?.connected) {
+      const provider = PROVIDERS.find((p) => p.id === location.state.connected);
+      setSuccessMsg(`${provider?.name ?? location.state.connected} connected successfully.`);
+      queryClient.invalidateQueries({ queryKey: ['integrations'] });
+      // Clear the router state so re-renders don't re-show the banner
+      window.history.replaceState({}, '');
+      const t = setTimeout(() => setSuccessMsg(''), 5000);
+      return () => clearTimeout(t);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const { data: integrations, isLoading, error } = useQuery({
     queryKey: ['integrations'],
     queryFn: () => api.get('/integrations').then((r) => r.data.data),
@@ -308,6 +421,13 @@ export default function IntegrationsPage() {
           <p className="text-sm text-text-secondary">Connect your ad platforms and tools</p>
         </div>
       </div>
+
+      {successMsg && (
+        <div className="flex items-center gap-2 bg-accent-green/10 border border-accent-green/20 text-accent-green rounded-xl px-4 py-3 text-sm">
+          <CheckCircle className="w-4 h-4 shrink-0" />
+          {successMsg}
+        </div>
+      )}
 
       {error && (
         <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl px-4 py-3 text-sm">

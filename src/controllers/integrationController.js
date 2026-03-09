@@ -3,6 +3,7 @@
 const integrationService = require('../services/integrations/IntegrationService');
 const { queues }         = require('../queues');
 const { success, created } = require('../common/response');
+const config             = require('../config');
 
 exports.listProviders = async (req, res, next) => {
   try {
@@ -48,6 +49,47 @@ exports.syncData = async (req, res, next) => {
     });
 
     return success(res, { provider, jobId: job.id, message: 'Sync job queued' });
+  } catch (err) { next(err); }
+};
+
+// GET /api/v1/integrations/:provider/oauth-url — generate OAuth authorization URL
+exports.getOAuthUrl = async (req, res, next) => {
+  try {
+    const { provider } = req.params;
+    const redirectUri = `${config.frontendUrl}/integrations/callback`;
+
+    let url;
+    if (provider === 'meta') {
+      if (!process.env.META_APP_ID) {
+        return res.status(503).json({ success: false, error: { message: 'Meta app credentials not configured on this server.' } });
+      }
+      const params = new URLSearchParams({
+        client_id:     process.env.META_APP_ID,
+        redirect_uri:  redirectUri,
+        scope:         'ads_read,ads_management,business_management',
+        response_type: 'code',
+        state:         provider,
+      });
+      url = `https://www.facebook.com/dialog/oauth?${params}`;
+    } else if (provider === 'google') {
+      if (!process.env.GOOGLE_CLIENT_ID) {
+        return res.status(503).json({ success: false, error: { message: 'Google app credentials not configured on this server.' } });
+      }
+      const params = new URLSearchParams({
+        client_id:     process.env.GOOGLE_CLIENT_ID,
+        redirect_uri:  redirectUri,
+        scope:         'https://www.googleapis.com/auth/adwords',
+        response_type: 'code',
+        access_type:   'offline',
+        prompt:        'consent',
+        state:         provider,
+      });
+      url = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+    } else {
+      return res.status(400).json({ success: false, error: { message: `OAuth not supported for ${provider}` } });
+    }
+
+    return success(res, { url, redirectUri });
   } catch (err) { next(err); }
 };
 

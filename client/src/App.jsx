@@ -29,6 +29,7 @@ const AcceptInvitePage        = lazy(() => import('./pages/AcceptInvitePage'));
 const BudgetProtectionPage    = lazy(() => import('./pages/BudgetProtectionPage'));
 const CompetitorHijackPage    = lazy(() => import('./pages/CompetitorHijackPage'));
 const ScalingPredictorPage    = lazy(() => import('./pages/ScalingPredictorPage'));
+const OAuthCallbackPage       = lazy(() => import('./pages/OAuthCallbackPage'));
 
 // ─── Loading spinner ──────────────────────────────────────────────────────────
 function PageSpinner() {
@@ -128,7 +129,8 @@ export default function App() {
           {/* Public */}
           <Route path="/login"         element={<PublicRoute><ErrorBoundary><LoginPage /></ErrorBoundary></PublicRoute>} />
           <Route path="/register"      element={<PublicRoute><ErrorBoundary><RegisterPage /></ErrorBoundary></PublicRoute>} />
-          <Route path="/accept-invite" element={<ErrorBoundary><AcceptInvitePage /></ErrorBoundary>} />
+          <Route path="/accept-invite"          element={<ErrorBoundary><AcceptInvitePage /></ErrorBoundary>} />
+          <Route path="/integrations/callback" element={<ErrorBoundary><OAuthCallbackPage /></ErrorBoundary>} />
           <Route path="/demo-login"    element={<ErrorBoundary><DemoLoginPage /></ErrorBoundary>} />
           <Route path="/pricing"       element={<ErrorBoundary><PricingPage /></ErrorBoundary>} />
 
