@@ -287,9 +287,12 @@ app.get('/api/v1/keywords/research', require('./middleware/auth').authenticate, 
 // ── Serve React app in production ────────────────────────────────────────────
 if (process.env.NODE_ENV === 'production') {
   const clientDist = path.join(__dirname, '..', 'client', 'dist');
-  app.use(express.static(clientDist));
+  app.use(express.static(clientDist, {
+    index: false
+  }));
   app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api')) {
+    // Do not intercept API or asset requests
+    if (req.path.startsWith('/api') || req.path.startsWith('/assets')) {
       return next();
     }
     res.sendFile(path.join(clientDist, 'index.html'));
