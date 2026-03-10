@@ -770,7 +770,7 @@ function SummaryUnavailableCard({ onRetry, isRetrying }) {
           Executive Summary Unavailable
         </h3>
         <p className="text-sm text-text-secondary mt-2">
-          The audit completed, but the AI summary was not generated. This usually means Gemini is unavailable or not configured in this environment.
+          The audit completed, but the AI summary was not generated. This usually means the configured AI provider is unavailable or not set up in this environment.
         </p>
       </div>
       <button

@@ -1,7 +1,8 @@
 'use strict';
 
 const logger = require('../../config/logger');
-const gemini = require('../ai/GeminiService');
+const anthropic = require('../ai/AnthropicService');
+const ollama = require('../ai/OllamaService');
 
 /**
  * SeoSummaryService — generates LLM executive summaries for completed SEO audits.
@@ -9,7 +10,7 @@ const gemini = require('../ai/GeminiService');
  * Gated by:
  *   - featureFlags.seoSummary.enabled  (SEO_SUMMARY_ENABLED env var)
  *   - PLAN_LIMITS[team.plan].summaryEnabled
- *   - GEMINI_API_KEY env var present
+ *   - ANTHROPIC_API_KEY or OLLAMA_URL available
  *
  * The service is called by AuditOrchestrator after scoring completes.
  * It returns a structured JSON object stored in the `executiveSummary` DB column.
@@ -30,7 +31,7 @@ const gemini = require('../ai/GeminiService');
  */
 class SeoSummaryService {
   get isAvailable() {
-    return gemini.isAvailable;
+    return anthropic.isAvailable || !!process.env.OLLAMA_URL;
   }
 
   // ── Public API ──────────────────────────────────────────────────────────────
@@ -50,7 +51,7 @@ class SeoSummaryService {
    */
   async generate(auditData) {
     if (!this.isAvailable) {
-      logger.warn('SeoSummaryService.generate: GEMINI_API_KEY not set — summary skipped');
+      logger.warn('SeoSummaryService.generate: no supported AI provider configured — summary skipped');
       return null;
     }
 
@@ -65,7 +66,7 @@ class SeoSummaryService {
     let lastErr;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        logger.info('SeoSummaryService: requesting Gemini summary', {
+        logger.info('SeoSummaryService: requesting executive summary', {
           url: auditData.url,
           score: auditData.overallScore,
           promptChars: prompt.length,
@@ -165,41 +166,69 @@ Generate a structured JSON response with exactly these three fields:
 Respond ONLY with valid JSON. No markdown, no code blocks, no extra text.`;
   }
 
-  /**
-   * Call the Gemini API and parse the JSON response.
-   */
   async _callApi(prompt) {
-    const rawText = await gemini.generate(prompt, {
-      maxTokens: 1500,
-      temperature: 0.4,
-    });
+    const providers = [
+      {
+        name: 'anthropic',
+        enabled: anthropic.isAvailable,
+        request: () => anthropic.generate(prompt, { maxTokens: 1500, temperature: 0.4 }),
+        parse: (raw) => anthropic.parseJSON(raw),
+      },
+      {
+        name: 'ollama',
+        enabled: true,
+        request: async () => {
+          if (!(await ollama.isAvailable())) return null;
+          return ollama.generate(prompt, { maxTokens: 1500, temperature: 0.3 });
+        },
+        parse: (raw) => ollama.parseJSON(raw),
+      },
+    ];
 
-    if (!rawText) {
-      throw new Error('SeoSummaryService: Gemini returned empty response');
+    const errors = [];
+    for (const provider of providers) {
+      if (!provider.enabled) continue;
+
+      const rawText = await provider.request();
+      if (!rawText) {
+        errors.push(`${provider.name}: empty response`);
+        continue;
+      }
+
+      const parsed = provider.parse(rawText);
+      if (!parsed) {
+        errors.push(`${provider.name}: non-JSON response`);
+        logger.warn('SeoSummaryService: provider returned unparsable summary', {
+          provider: provider.name,
+          preview: rawText.slice(0, 200),
+        });
+        continue;
+      }
+
+      const normalized = this._normalizeSummary(parsed);
+      if (normalized) {
+        normalized.provider = provider.name;
+        return normalized;
+      }
+
+      errors.push(`${provider.name}: missing required fields`);
     }
 
-    // Parse JSON — the prompt asks for pure JSON, but handle code blocks defensively
-    const cleaned = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+    throw new Error(`SeoSummaryService: all providers failed (${errors.join('; ')})`);
+  }
 
-    let parsed;
-    try {
-      parsed = JSON.parse(cleaned);
-    } catch (parseErr) {
-      throw new Error(`SeoSummaryService: LLM returned non-JSON: ${rawText.slice(0, 200)}`);
-    }
-
-    // Validate shape
-    if (!parsed.executiveSummary || !Array.isArray(parsed.priorityRoadmap) || !parsed.businessImpact) {
-      throw new Error('SeoSummaryService: LLM response missing required fields');
+  _normalizeSummary(parsed) {
+    if (!parsed || !parsed.executiveSummary || !Array.isArray(parsed.priorityRoadmap) || !parsed.businessImpact) {
+      return null;
     }
 
     return {
       executiveSummary: String(parsed.executiveSummary),
-      priorityRoadmap:  parsed.priorityRoadmap.slice(0, 7).map((item) => ({
-        title:       String(item.title       ?? ''),
+      priorityRoadmap: parsed.priorityRoadmap.slice(0, 7).map((item) => ({
+        title: String(item.title ?? ''),
         description: String(item.description ?? ''),
-        effort:      ['quick-win', 'medium', 'heavy-lift'].includes(item.effort) ? item.effort : 'medium',
-        impact:      ['high', 'medium', 'low'].includes(item.impact) ? item.impact : 'medium',
+        effort: ['quick-win', 'medium', 'heavy-lift'].includes(item.effort) ? item.effort : 'medium',
+        impact: ['high', 'medium', 'low'].includes(item.impact) ? item.impact : 'medium',
       })),
       businessImpact: String(parsed.businessImpact),
     };

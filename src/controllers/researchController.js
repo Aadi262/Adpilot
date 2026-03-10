@@ -5,6 +5,11 @@ const competitorHijackService  = require('../services/ai/CompetitorHijackService
 const { success, created }     = require('../common/response');
 const AppError                  = require('../common/AppError');
 
+const REPORT_STATUS = {
+  market: 'market_completed',
+  adIntel: 'ad_intel_completed',
+};
+
 // ── Competitors CRUD ──────────────────────────────────────────────────────────
 
 // GET /api/v1/competitors
@@ -73,7 +78,13 @@ exports.hijackAnalysis = async (req, res, next) => {
     const analysis = await competitorHijackService.analyzeCompetitor(domain, req.user.teamId);
     // Persist topKeywords back to competitor record (enables Gaps tab)
     await _saveCompetitorKeywords(analysis, req.user.teamId);
-    return success(res, analysis);
+    const report = await _saveResearchReport({
+      teamId: req.user.teamId,
+      kind: 'adIntel',
+      query: domain,
+      analysis,
+    });
+    return success(res, { ...analysis, reportId: report.id, savedAt: report.createdAt });
   } catch (err) {
     next(err);
   }
@@ -89,8 +100,43 @@ exports.analyzeUrl = async (req, res, next) => {
     const analysis = await competitorHijackService.analyzeCompetitor(clean, req.user.teamId);
     // Persist topKeywords back to competitor record (enables Gaps tab)
     await _saveCompetitorKeywords(analysis, req.user.teamId);
-    return success(res, analysis);
+    const report = await _saveResearchReport({
+      teamId: req.user.teamId,
+      kind: 'market',
+      query: url,
+      analysis,
+    });
+    return success(res, { ...analysis, reportId: report.id, savedAt: report.createdAt });
   } catch (err) { next(err); }
+};
+
+// GET /api/v1/research/reports/latest?kind=market|ad-intelligence
+exports.getLatestReport = async (req, res, next) => {
+  try {
+    const kind = _parseKind(req.query.kind);
+    await _pruneExpiredReports(req.user.teamId);
+
+    const report = await prisma.researchReport.findFirst({
+      where: {
+        teamId: req.user.teamId,
+        status: REPORT_STATUS[kind],
+        createdAt: { gte: _cutoffDate() },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return success(res, {
+      report: report ? {
+        id: report.id,
+        kind,
+        query: report.query,
+        createdAt: report.createdAt,
+        analysis: report.adAnalysis ?? {},
+      } : null,
+    });
+  } catch (err) {
+    next(err);
+  }
 };
 
 /**
@@ -115,4 +161,40 @@ async function _saveCompetitorKeywords(analysis, teamId) {
   } catch (_) {
     // Non-fatal — gaps just won't update
   }
+}
+
+async function _saveResearchReport({ teamId, kind, query, analysis }) {
+  await _pruneExpiredReports(teamId);
+
+  return prisma.researchReport.create({
+    data: {
+      teamId,
+      query,
+      competitors: [],
+      adAnalysis: analysis,
+      keywords: Array.isArray(analysis?.topKeywords) ? analysis.topKeywords.slice(0, 20) : [],
+      suggestions: Array.isArray(analysis?.keywordGaps) ? analysis.keywordGaps.slice(0, 20) : [],
+      status: REPORT_STATUS[kind],
+    },
+  });
+}
+
+async function _pruneExpiredReports(teamId) {
+  await prisma.researchReport.deleteMany({
+    where: {
+      teamId,
+      status: { in: Object.values(REPORT_STATUS) },
+      createdAt: { lt: _cutoffDate() },
+    },
+  });
+}
+
+function _cutoffDate() {
+  return new Date(Date.now() - 24 * 60 * 60 * 1000);
+}
+
+function _parseKind(rawKind) {
+  if (rawKind === 'market') return 'market';
+  if (rawKind === 'ad-intelligence' || rawKind === 'adIntel') return 'adIntel';
+  throw AppError.badRequest('kind must be "market" or "ad-intelligence"');
 }

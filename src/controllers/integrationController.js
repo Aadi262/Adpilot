@@ -117,7 +117,7 @@ exports.getStatus = async (req, res, next) => {
           valueserp: !!e.VALUESERP_API_KEY,
         },
         missing: [
-          !e.GEMINI_API_KEY               && 'GEMINI_API_KEY',
+          !e.ANTHROPIC_API_KEY           && 'ANTHROPIC_API_KEY',
           !e.VALUESERP_API_KEY            && 'VALUESERP_API_KEY',
           !e.META_ACCESS_TOKEN             && 'META_ACCESS_TOKEN',
           !e.GOOGLE_ADS_DEVELOPER_TOKEN    && 'GOOGLE_ADS_DEVELOPER_TOKEN',

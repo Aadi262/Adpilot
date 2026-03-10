@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Globe, Search, Plus, Trash2, TrendingUp, Target, Copy, ChevronRight,
@@ -195,8 +195,29 @@ function CompetitorSection() {
 }
 
 // ─── Market Research section ──────────────────────────────────────────────────
+function normalizeMarketResearchResult(data = {}) {
+  return {
+    domain: data.domain,
+    crawlFailed: data.crawlFailed || !data.isReal,
+    isReal: data.isReal,
+    title: data.title || data.domain,
+    description: data.description || '',
+    topKeywords: (data.topKeywords || []).slice(0, 8).map((k) => (typeof k === 'string' ? k : k.word || k.keyword || '')).filter(Boolean),
+    headlines: (data.headings || []).slice(0, 6).map((h) => (typeof h === 'string' ? h : h.text || '')).filter(Boolean),
+    techStack: data.techStack || [],
+    ctas: (data.ctas || []).slice(0, 6),
+    messagingAngles: data.messagingAngles || [],
+    weaknesses: data.weaknesses || [],
+    strengths: data.strengths || [],
+    keywordGaps: (data.keywordGaps || []).slice(0, 5),
+    hasAiInsights: data.hasAiInsights || false,
+    savedAt: data.savedAt || null,
+  };
+}
+
 function MarketResearchSection() {
   const toast = useToast();
+  const queryClient = useQueryClient();
   const [url, setUrl] = useState('');
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -204,6 +225,21 @@ function MarketResearchSection() {
   const [step, setStep] = useState(0);
   const resultRef = useRef(null);
   const ANALYZE_STEPS = ['Crawling site…', 'Analyzing keywords…', 'Generating insights…'];
+
+  const { data: latestMarketReport } = useQuery({
+    queryKey: ['research', 'latest', 'market'],
+    queryFn: () => api.get('/research/reports/latest?kind=market').then((r) => r.data.data.report),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  useEffect(() => {
+    if (!latestMarketReport?.analysis) return;
+    setResult(normalizeMarketResearchResult({
+      ...latestMarketReport.analysis,
+      savedAt: latestMarketReport.createdAt,
+    }));
+    if (latestMarketReport.query) setUrl(latestMarketReport.query);
+  }, [latestMarketReport]);
 
   const analyze = async () => {
     if (!url.trim()) return;
@@ -215,23 +251,8 @@ function MarketResearchSection() {
     try {
       const res = await api.post('/competitors/analyze', { url: url.trim() });
       const data = res.data.data;
-      // API returns flat structure (title, ctas, topKeywords etc at top level — not nested)
-      setResult({
-        domain:        data.domain,
-        crawlFailed:   data.crawlFailed || !data.isReal,
-        isReal:        data.isReal,
-        title:         data.title || data.domain,
-        description:   data.description || '',
-        topKeywords:   (data.topKeywords || []).slice(0, 8).map(k => (typeof k === 'string' ? k : k.word || k.keyword || '')).filter(Boolean),
-        headlines:     (data.headings || []).slice(0, 6).map(h => (typeof h === 'string' ? h : h.text || '')).filter(Boolean),
-        techStack:     data.techStack || [],
-        ctas:          (data.ctas || []).slice(0, 6),
-        messagingAngles: data.messagingAngles || [],
-        weaknesses:    data.weaknesses || [],
-        strengths:     data.strengths  || [],
-        keywordGaps:   (data.keywordGaps || []).slice(0, 5),
-        hasAiInsights: data.hasAiInsights || false,
-      });
+      setResult(normalizeMarketResearchResult(data));
+      queryClient.invalidateQueries({ queryKey: ['research', 'latest', 'market'] });
       requestAnimationFrame(() => {
         resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
@@ -301,6 +322,12 @@ function MarketResearchSection() {
             <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs">
               <AlertCircle className="w-3.5 h-3.5 shrink-0" />
               Demo data shown — site blocked automated crawl. Add as competitor for ongoing tracking.
+            </div>
+          )}
+
+          {result.savedAt && (
+            <div className="text-xs text-text-secondary">
+              Saved {new Date(result.savedAt).toLocaleString()}
             </div>
           )}
 
@@ -420,10 +447,27 @@ function AdIntelSection() {
   const [result, setResult]   = useState(null);
   const [loading, setLoading] = useState(false);
   const [step, setStep]       = useState(0);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const { data: latestAdIntelReport } = useQuery({
+    queryKey: ['research', 'latest', 'ad-intelligence'],
+    queryFn: () => api.get('/research/reports/latest?kind=ad-intelligence').then((r) => r.data.data.report),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  useEffect(() => {
+    if (!latestAdIntelReport?.analysis) return;
+    setResult({
+      ...latestAdIntelReport.analysis,
+      savedAt: latestAdIntelReport.createdAt,
+    });
+    if (latestAdIntelReport.query) setUrl(latestAdIntelReport.query);
+  }, [latestAdIntelReport]);
 
   const research = async () => {
     if (!url.trim()) return;
     setLoading(true);
+    setErrorMsg('');
     setResult(null);
     setStep(0);
 
@@ -433,9 +477,12 @@ function AdIntelSection() {
       const res = await api.get(`/research/hijack-analysis?domain=${encodeURIComponent(url.trim())}`);
       clearInterval(interval);
       setResult(res.data.data);
+      queryClient.invalidateQueries({ queryKey: ['research', 'latest', 'ad-intelligence'] });
     } catch (err) {
       clearInterval(interval);
-      toast.error(err?.response?.data?.error?.message || 'Analysis failed');
+      const message = err?.response?.data?.error?.message || 'Analysis failed';
+      setErrorMsg(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -483,10 +530,29 @@ function AdIntelSection() {
             </div>
           </div>
         )}
+
+        {errorMsg && !loading && (
+          <div className="rounded-xl border border-red-500/20 bg-red-500/8 px-4 py-3 flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-red-300">Competitor analysis failed</p>
+                <p className="text-xs text-text-secondary mt-1">{errorMsg}</p>
+              </div>
+            </div>
+            <button onClick={research} className="btn-secondary text-sm whitespace-nowrap">Try Again</button>
+          </div>
+        )}
       </div>
 
       {result && !loading && (
         <div className="space-y-4">
+          {result.savedAt && (
+            <div className="text-xs text-text-secondary">
+              Saved {new Date(result.savedAt).toLocaleString()}
+            </div>
+          )}
+
           {/* Stats */}
           <div className="grid grid-cols-3 gap-3">
             <div className="card text-center py-3">

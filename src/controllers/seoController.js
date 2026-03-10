@@ -163,7 +163,7 @@ exports.regenerateSummary = async (req, res, next) => {
 
     const SeoSummaryService = require('../services/seo/SeoSummaryService');
     if (!SeoSummaryService.isAvailable) {
-      throw AppError.serviceUnavailable('Executive summary is unavailable because GEMINI_API_KEY is not configured on this server.');
+      throw AppError.serviceUnavailable('Executive summary is unavailable because no supported AI provider is configured on this server.');
     }
 
     const summary = await SeoSummaryService.generate({
@@ -177,7 +177,7 @@ exports.regenerateSummary = async (req, res, next) => {
     });
 
     if (!summary) {
-      throw AppError.serviceUnavailable('Executive summary could not be generated right now. Check Gemini configuration and try again.');
+      throw AppError.serviceUnavailable('Executive summary could not be generated right now. Check the configured AI provider and try again.');
     }
 
     await prisma.seoAudit.update({
