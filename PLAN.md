@@ -135,6 +135,22 @@ Frontend: React 18 / Vite / Tailwind / React Query / Zustand / Recharts.
 - Research tab-switch loss was caused by local component state only. Persistence now exists on both backend and frontend.
 - SEO summary payload currently comes back as a structured object (`executiveSummary`, `priorityRoadmap`, `businessImpact`) and is rendering correctly on the live app.
 
+### Session Update — March 10, 2026 (Intelligence Overhaul Pass)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Keyword Research upgrade | ✅ | ValueSERP-backed SERP context, trend delta, intent/difficulty/opportunity analysis, SERP feature output |
+| Content Brief upgrade | ✅ | Brief generation now uses top-ranking SERP pages, headings, word counts, related searches, and People Also Ask |
+| Radar vs Pulse differentiation | ✅ | Research overview and attack-plan modes now diverge at the service/controller layer |
+| Market Research output quality | ✅ | Added threat level, topical coverage, and richer competitive context from live crawl + SERP enrichment |
+| Sentinel improvements | ✅ | Scan now returns spend summary, CPA/velocity, anomaly list, and auto-seeds sensible default rules |
+| Forge scoring improvements | ✅ | Ad variations now use deterministic relevance / emotion / CTA / uniqueness scoring instead of random quality scores |
+| Reports upgrade | ✅ | Report payload now includes executive summary, SEO health breakdown, keyword table, competitor matrix, content recommendations, and action plan sections |
+| VPS verification | ✅ | Live checks passed for keyword research, content briefs, Sentinel scan, ad generation, and report generation on commit `9fd42c7e` |
+
+**Still pending:**
+- Global Session 5 polish is not fully complete yet. Shared skeleton/error/empty states still need one cleanup pass across all remaining surfaces.
+
 ### Phase C — Complete UI/UX Polish ✅ Complete
 
 **Built this session:**
