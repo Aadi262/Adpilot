@@ -118,6 +118,23 @@ Frontend: React 18 / Vite / Tailwind / React Query / Zustand / Recharts.
 
 ## 3. Current Stage — Enhancement Phases
 
+### Session Update — March 10, 2026
+
+**Production hardening completed this session:**
+
+| Item | Status | Notes |
+|------|--------|-------|
+| SEO executive summary provider rollback | ✅ | `SeoSummaryService` now uses Anthropic first, with Ollama fallback instead of Gemini-only generation |
+| VPS production deploy | ✅ | Live `adpilot-app` rebuilt on `194.163.146.149` from commit `2bbca7fd` without overwriting unrelated server-side compose/nginx changes |
+| Executive summary on VPS | ✅ | Live audit completed with stored summary payload and provider=`anthropic` |
+| Market Research persistence | ✅ | Results now save into `research_reports` and reload from `/api/v1/research/reports/latest?kind=market` |
+| Ad Intelligence persistence | ✅ | Results now save into `research_reports` and reload from `/api/v1/research/reports/latest?kind=ad-intelligence` |
+| 24-hour research retention | ✅ | Market Research and Ad Intelligence reports are pruned after 24 hours on save/load |
+
+**Notes:**
+- Research tab-switch loss was caused by local component state only. Persistence now exists on both backend and frontend.
+- SEO summary payload currently comes back as a structured object (`executiveSummary`, `priorityRoadmap`, `businessImpact`) and is rendering correctly on the live app.
+
 ### Phase C — Complete UI/UX Polish ✅ Complete
 
 **Built this session:**
