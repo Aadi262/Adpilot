@@ -9,6 +9,7 @@ const api = axios.create({
     : '/api/v1',
   headers: { 'Content-Type': 'application/json' },
   withCredentials: true,
+  timeout: 30000,
 });
 
 // Attach token from store on every request

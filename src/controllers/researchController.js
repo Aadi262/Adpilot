@@ -139,6 +139,37 @@ exports.getLatestReport = async (req, res, next) => {
   }
 };
 
+// GET /api/v1/research/reports?kind=market|ad-intelligence&limit=10
+exports.getReports = async (req, res, next) => {
+  try {
+    const kind = _parseKind(req.query.kind);
+    const limit = Math.min(20, Math.max(1, parseInt(req.query.limit, 10) || 10));
+    await _pruneExpiredReports(req.user.teamId);
+
+    const reports = await prisma.researchReport.findMany({
+      where: {
+        teamId: req.user.teamId,
+        status: REPORT_STATUS[kind],
+        createdAt: { gte: _cutoffDate() },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+
+    return success(res, {
+      reports: reports.map((report) => ({
+        id: report.id,
+        kind,
+        query: report.query,
+        createdAt: report.createdAt,
+        analysis: report.adAnalysis ?? {},
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 /**
  * After a competitor analysis, update the stored Competitor record with
  * topKeywords from the crawl so CompetitorGapService can use them.

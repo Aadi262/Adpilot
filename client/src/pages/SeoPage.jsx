@@ -1033,6 +1033,41 @@ function BriefDetailModal({ brief, onClose, onDelete }) {
             </div>
           )}
 
+          {brief.entities?.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Entities To Mention</p>
+              <div className="flex flex-wrap gap-1.5">
+                {brief.entities.map((entity) => (
+                  <span
+                    key={entity}
+                    className="text-xs px-2.5 py-1 rounded-full border border-border bg-bg-primary text-text-secondary"
+                  >
+                    {entity}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {brief.competitorHeadlines?.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Competitor Headlines</p>
+              <div className="space-y-2">
+                {brief.competitorHeadlines.map((item, idx) => (
+                  <div key={`${item.title}-${idx}`} className="bg-bg-primary border border-border rounded-lg px-4 py-3">
+                    <p className="text-sm font-medium text-text-primary">{item.title}</p>
+                    {item.url && <p className="mt-1 text-xs text-text-secondary truncate">{item.url}</p>}
+                    {item.headings?.length > 0 && (
+                      <p className="mt-2 text-xs text-text-secondary">
+                        {item.headings.join(' | ')}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Competitor angle */}
           {brief.competitorAngle && (
             <div>

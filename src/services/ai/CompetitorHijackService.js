@@ -178,9 +178,14 @@ class CompetitorHijackService {
   }
 
   _buildAttackResult(baseResult, crawlData, aiInsights) {
+    const researchBasis = this._buildResearchBasis(baseResult, crawlData);
+    const attackVectors = this._buildAttackVectors(baseResult, crawlData, aiInsights);
+
     return {
       ...baseResult,
       mode: 'attack',
+      researchBasis,
+      attackVectors,
       weakestPages: (crawlData.headings || []).slice(0, 3).map((h, idx) => ({
         page: h.text,
         reason: idx === 0 ? 'Weak differentiation in headline copy' : 'Likely low CTR due to generic positioning',
@@ -194,6 +199,36 @@ class CompetitorHijackService {
         ? ['Paid competition exists on this SERP, indicating active budget pressure.', 'Monitor this keyword weekly for new ad copy changes.']
         : ['Live spend timing data is unavailable without ad network transparency APIs.'],
     };
+  }
+
+  _buildResearchBasis(baseResult, crawlData) {
+    const topKeyword = baseResult.topKeywords?.[0]?.keyword || baseResult.topKeywords?.[0]?.word || null;
+    const secondKeyword = baseResult.topKeywords?.[1]?.keyword || baseResult.topKeywords?.[1]?.word || null;
+    return [
+      topKeyword ? `Top visible keyword on-site: "${topKeyword}".` : null,
+      secondKeyword ? `Secondary keyword cluster: "${secondKeyword}".` : null,
+      crawlData.ctas?.[0] ? `Primary CTA observed: "${crawlData.ctas[0]}".` : null,
+      crawlData.headings?.[0]?.text ? `Homepage lead headline: "${crawlData.headings[0].text}".` : null,
+      crawlData.techStack?.length ? `Detected stack includes ${crawlData.techStack.slice(0, 3).join(', ')}.` : null,
+    ].filter(Boolean);
+  }
+
+  _buildAttackVectors(baseResult, crawlData, aiInsights) {
+    const topKeywords = (baseResult.topKeywords || []).slice(0, 3);
+    const ctas = crawlData.ctas || [];
+    const weaknesses = aiInsights?.weaknesses || [];
+
+    return topKeywords.map((kw, idx) => {
+      const keyword = kw.keyword || kw.word;
+      const cta = ctas[idx] || ctas[0] || 'Book a demo';
+      return {
+        title: `Capture ${keyword} demand`,
+        evidence: `They surface "${keyword}" prominently and pair it with "${cta}" in their conversion path.`,
+        move: weaknesses[idx]
+          ? `Counter their weakness: ${weaknesses[idx]}`
+          : `Build a dedicated landing page and paid ad group around "${keyword}" with a stronger proof point than "${cta}".`,
+      };
+    }).filter((item) => item.title);
   }
 
   _computeThreatLevel(topKeywords, crawlData) {
@@ -255,30 +290,43 @@ class CompetitorHijackService {
   }
 
   _buildWinbackFromData(crawl, aiInsights) {
-    if (aiInsights?.weaknesses?.length) {
-      return aiInsights.weaknesses.slice(0, 3).map((w, i) => ({
-        angle:             ['Price Advantage', 'Feature Gap', 'Better Support'][i] || 'Opportunity',
-        suggestedHeadline: `${i === 0 ? 'More affordable than' : 'Everything missing from'} ${crawl.domain}`.substring(0, 60),
-        reason:            w,
-        source:            'ai',
-      }));
-    }
+    const primaryKeyword = crawl.topKeywords?.[0]?.keyword || crawl.topKeywords?.[0]?.word || null;
+    const secondaryKeyword = crawl.topKeywords?.[1]?.keyword || crawl.topKeywords?.[1]?.word || null;
+    const primaryCta = crawl.ctas?.[0] || 'Book a demo';
+    const secondaryCta = crawl.ctas?.[1] || 'Start free trial';
+    const headlineAnchor = crawl.headings?.[0]?.text?.substring(0, 72) || crawl.title || crawl.domain;
+    const weaknesses = aiInsights?.weaknesses || [];
 
-    const name = crawl.domain.split('.')[0];
-    return [
+    const opportunities = [
+      primaryKeyword ? {
+        angle: 'Keyword Intercept',
+        suggestedHeadline: `Own "${primaryKeyword}" before they do`,
+        reason: `They visibly emphasize "${primaryKeyword}". Build a tighter landing page and ad set around that exact demand instead of broad competitor messaging.`,
+        action: `Launch a dedicated ${primaryKeyword} comparison page and pair it with exact-match search ads.`,
+        targetKeyword: primaryKeyword,
+        source: weaknesses.length ? 'ai' : 'crawl',
+      } : null,
       {
-        angle:             'Price Comparison',
-        suggestedHeadline: `Switch from ${name} — Better value`,
-        reason:            `Counter their ${crawl.ctas?.[0] || 'main CTA'} with a transparent pricing advantage.`,
-        source:            'crawl',
+        angle: 'CTA Counter',
+        suggestedHeadline: `Beat their "${primaryCta}" offer`,
+        reason: `Their conversion path leans on "${primaryCta}". Counter with a stronger CTA that reduces friction and makes the next step clearer.`,
+        action: `Test a direct-response alternative to "${primaryCta}" such as "${secondaryCta}" with proof and urgency near the fold.`,
+        targetKeyword: secondaryKeyword,
+        source: weaknesses.length ? 'ai' : 'crawl',
       },
       {
-        angle:             'Feature Gap',
-        suggestedHeadline: `Everything ${name} does — and more`,
-        reason:            `They emphasize ${crawl.headings?.[0]?.text?.substring(0, 60) || 'core features'}. Highlight your unique differentiators.`,
-        source:            'crawl',
+        angle: 'Messaging Gap',
+        suggestedHeadline: `Turn "${headlineAnchor.substring(0, 38)}" into your angle`,
+        reason: weaknesses[0]
+          ? `Their weakness is clear: ${weaknesses[0]}. Position against that gap with concrete proof, pricing clarity, or faster onboarding.`
+          : `Their current headline focus is "${headlineAnchor}". Reframe the same category promise with a sharper outcome and clearer differentiation.`,
+        action: `Build one counter-campaign that directly addresses the missing promise in their current positioning.`,
+        targetKeyword: secondaryKeyword || primaryKeyword,
+        source: weaknesses.length ? 'ai' : 'crawl',
       },
-    ];
+    ].filter(Boolean);
+
+    return opportunities.slice(0, 3);
   }
 
   /**

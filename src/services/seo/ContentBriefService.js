@@ -39,47 +39,21 @@ class ContentBriefService {
     const serpContext = await this._buildSerpContext(targetKeyword);
     let aiResult = null;
 
-    // 1. Ollama (local, free, no API key)
-    if (!aiResult && await ollama.isAvailable()) {
-      aiResult = await this._generateWithOllama(teamId, targetKeyword, serpContext);
-    }
-
-    // 2. Gemini (free key)
-    if (!aiResult && gemini.isAvailable) {
-      aiResult = await this._generateWithGemini(teamId, targetKeyword, serpContext);
-    }
-
-    // 3. Anthropic Claude (paid key, very reliable fallback)
+    // 1. Anthropic Claude (preferred because current VPS env is working here)
     if (!aiResult && anthropic.isAvailable) {
       aiResult = await this._generateWithAnthropic(teamId, targetKeyword, serpContext);
     }
 
-    // 4. OpenAI (paid, generic fallback)
-    if (!aiResult && config.openaiApiKey) {
-      aiResult = await this._generateWithAI(targetKeyword);
-    }
-
-    // 5. HuggingFace (free key, generic fallback)
-    if (!aiResult && huggingface.isAvailable) {
-      aiResult = await this._generateWithHuggingFace(teamId, targetKeyword);
+    // 2. Gemini (secondary AI path if Anthropic is unavailable)
+    if (!aiResult && gemini.isAvailable) {
+      aiResult = await this._generateWithGemini(teamId, targetKeyword, serpContext);
     }
 
     if (aiResult) {
-      // AI path
-      const brief = await prisma.contentBrief.create({
-        data: {
-          teamId,
-          targetKeyword,
-          title:           aiResult.title,
-          outline:         aiResult.outline,
-          relatedKeywords: aiResult.relatedKeywords ?? [],
-          status:          'draft',
-        },
-      });
-      return { ...brief, ...aiResult, serpContext, _source: 'ai' };
+      return this._saveBrief(teamId, targetKeyword, aiResult, serpContext);
     }
 
-    // Fallback: deterministic TF-IDF
+    // Fallback: deterministic SERP-backed brief, not generic model output.
     return this._generateFallback(teamId, targetKeyword, serpContext);
   }
 
@@ -181,14 +155,9 @@ Return ONLY the JSON object, no markdown, no extra text.`;
    */
   async _generateWithGemini(teamId, targetKeyword, serpContext) {
     try {
-      const relatedKeywords = await prisma.keyword.findMany({
-        where:  { teamId },
-        select: { keyword: true },
-        take:   20,
-      });
       const result = await this._generateSerpBackedBrief(
         targetKeyword,
-        [...relatedKeywords.map(k => k.keyword), ...(serpContext.relatedSearches || [])],
+        await this._collectRelatedKeywords(teamId, serpContext),
         serpContext,
         'gemini'
       );
@@ -206,14 +175,9 @@ Return ONLY the JSON object, no markdown, no extra text.`;
    */
   async _generateWithAnthropic(teamId, targetKeyword, serpContext) {
     try {
-      const relatedKeywords = await prisma.keyword.findMany({
-        where:  { teamId },
-        select: { keyword: true },
-        take:   12,
-      });
       const result = await this._generateSerpBackedBrief(
         targetKeyword,
-        [...relatedKeywords.map(k => k.keyword), ...(serpContext.relatedSearches || [])],
+        await this._collectRelatedKeywords(teamId, serpContext),
         serpContext,
         'anthropic'
       );
@@ -233,39 +197,42 @@ Return ONLY the JSON object, no markdown, no extra text.`;
     const allKeywords     = await prisma.keyword.findMany({ where: { teamId } });
     const relatedKeywords = this._clusterRelated(targetKeyword, allKeywords);
     const semanticTerms   = this._extractSemanticTerms(targetKeyword, relatedKeywords);
-
     const avgDifficulty = relatedKeywords.length
       ? relatedKeywords.reduce((s, k) => s + (k.difficulty || 50), 0) / relatedKeywords.length
       : 50;
+    const relatedKeywordNames = this._dedupeStrings([
+      ...relatedKeywords.map((k) => k.keyword),
+      ...(serpContext.relatedSearches || []),
+    ]).slice(0, 20);
+    const topResults = serpContext.topResults || [];
+    const outline = this._buildDeterministicSerpOutline(targetKeyword, serpContext, semanticTerms);
+    const entities = this._extractEntities(topResults, targetKeyword);
+    const competitorHeadlines = topResults.slice(0, 3).map((result) => ({
+      title: result.title,
+      url: result.link,
+      headings: (result.headings || []).slice(0, 4),
+    }));
 
-    const outline = this._generateOutline(targetKeyword, semanticTerms);
-
-    const brief = await prisma.contentBrief.create({
-      data: {
-        teamId,
-        targetKeyword,
-        title:           this._generateTitle(targetKeyword),
-        outline,
-        relatedKeywords: relatedKeywords.map((k) => k.keyword),
-        status:          'draft',
-      },
-    });
-
-    return {
-      ...brief,
-      metaDescription:  `A comprehensive guide to ${targetKeyword}. Learn everything you need to know about ${targetKeyword} in this in-depth article.`,
-      targetWordCount:  this._estimateWordCount(avgDifficulty),
-      searchIntent:     'informational',
-      competitorAngle:  serpContext.topResults?.length
-        ? `Beat the current SERP leaders by covering ${serpContext.topResults.slice(0, 3).map((r) => r.title).join(' / ')} and then adding fresher examples and stronger comparisons.`
-        : 'Cover foundational topics comprehensively while adding unique data, examples, and actionable tips.',
-      callToAction:     `Start implementing ${targetKeyword} best practices today.`,
+    const fallbackBrief = {
+      title: this._generateTitle(targetKeyword),
+      metaDescription: this._buildMetaDescription(targetKeyword, serpContext),
+      targetWordCount: this._estimateSerpWordCount(avgDifficulty, topResults),
+      searchIntent: this._inferIntentFromSerp(targetKeyword, serpContext),
+      outline,
+      relatedKeywords: relatedKeywordNames,
+      competitorAngle: this._buildCompetitorAngle(topResults, targetKeyword),
+      callToAction: `Use this brief to publish a stronger ${targetKeyword} page than the current top-ranking results.`,
+      titleOptions: this._buildSerpTitleOptions(targetKeyword, serpContext),
+      peopleAlsoAsk: (serpContext.peopleAlsoAsk || []).slice(0, 6),
+      uniqueAngle: this._buildUniqueAngle(targetKeyword, serpContext),
+      entities,
+      competitorHeadlines,
       semanticTerms,
-      peopleAlsoAsk: serpContext.peopleAlsoAsk || [],
-      titleOptions: this._buildTitleOptions(targetKeyword),
       relatedKeywordsEnriched: relatedKeywords.slice(0, 10),
       _source: 'fallback',
     };
+
+    return this._saveBrief(teamId, targetKeyword, fallbackBrief, serpContext);
   }
 
   async _buildSerpContext(targetKeyword) {
@@ -276,6 +243,8 @@ Return ONLY the JSON object, no markdown, no extra text.`;
       topResults,
       peopleAlsoAsk: snapshot?.relatedQuestions || [],
       relatedSearches: snapshot?.relatedSearches || [],
+      serpFeatures: snapshot?.serpFeatures || [],
+      totalResults: snapshot?.totalResults || null,
     };
   }
 
@@ -309,12 +278,18 @@ Generate a JSON object with these exact fields:
   "callToAction": "primary CTA suggestion",
   "titleOptions": ["...", "...", "..."],
   "peopleAlsoAsk": ["...", "..."],
-  "uniqueAngle": "what top results are missing"
+  "uniqueAngle": "what top results are missing",
+  "entities": ["entity 1", "entity 2"],
+  "competitorHeadlines": [{"title":"...", "url":"...", "headings":["...", "..."]}]
 }
 
 Rules:
 - Use the competitor headings and PAA questions directly in the planning.
-- Avoid generic sections like "What is ${targetKeyword}?" unless the SERP clearly demands it.
+- Avoid generic sections like "What is ${targetKeyword}?" or "Beginner tips" unless the SERP clearly demands them.
+- Build the outline from the actual ranking pages above. At least 4 outline sections must clearly map to real competitor headings or question clusters.
+- Make the title options meaningfully different from each other: one practical, one comparison-driven, one decision-making or commercial.
+- Related keywords must be semantically relevant to the SERP context above, not generic SEO filler.
+- Unique angle must name a specific coverage gap from the ranking pages above.
 - Return valid JSON only.`;
 
     let raw = null;
@@ -323,11 +298,84 @@ Rules:
 
     const parsed = anthropic.parseJSON(raw);
     if (!parsed || !parsed.title || !Array.isArray(parsed.outline)) return null;
-    if (!SEARCH_INTENTS.includes(parsed.searchIntent)) parsed.searchIntent = 'informational';
-    parsed.relatedKeywords = (parsed.relatedKeywords || relatedKeywords).slice(0, 20);
-    parsed.titleOptions = (parsed.titleOptions || this._buildTitleOptions(targetKeyword)).slice(0, 5);
-    parsed.peopleAlsoAsk = (parsed.peopleAlsoAsk || serpContext.peopleAlsoAsk || []).slice(0, 5);
-    return parsed;
+    return this._normalizeBriefResult(parsed, targetKeyword, relatedKeywords, serpContext, provider);
+  }
+
+  async _collectRelatedKeywords(teamId, serpContext) {
+    const teamKeywords = await prisma.keyword.findMany({
+      where: { teamId },
+      select: { keyword: true },
+      take: 20,
+    });
+    return this._dedupeStrings([
+      ...teamKeywords.map((entry) => entry.keyword),
+      ...(serpContext.relatedSearches || []),
+    ]).slice(0, 20);
+  }
+
+  _normalizeBriefResult(parsed, targetKeyword, relatedKeywords, serpContext, provider) {
+    const topResults = serpContext.topResults || [];
+    const normalized = {
+      title: parsed.title || this._generateTitle(targetKeyword),
+      metaDescription: parsed.metaDescription || this._buildMetaDescription(targetKeyword, serpContext),
+      targetWordCount: Number(parsed.targetWordCount) || this._estimateSerpWordCount(50, topResults),
+      searchIntent: SEARCH_INTENTS.includes(parsed.searchIntent) ? parsed.searchIntent : this._inferIntentFromSerp(targetKeyword, serpContext),
+      outline: this._normalizeOutline(parsed.outline, targetKeyword, serpContext),
+      relatedKeywords: this._dedupeStrings([
+        ...(Array.isArray(parsed.relatedKeywords) ? parsed.relatedKeywords : []),
+        ...relatedKeywords,
+      ]).slice(0, 20),
+      competitorAngle: parsed.competitorAngle || this._buildCompetitorAngle(topResults, targetKeyword),
+      callToAction: parsed.callToAction || `Use this brief to create the strongest ${targetKeyword} page in your category.`,
+      titleOptions: this._dedupeStrings([
+        ...(Array.isArray(parsed.titleOptions) ? parsed.titleOptions : []),
+        ...this._buildSerpTitleOptions(targetKeyword, serpContext),
+      ]).slice(0, 5),
+      peopleAlsoAsk: this._dedupeStrings([
+        ...(Array.isArray(parsed.peopleAlsoAsk) ? parsed.peopleAlsoAsk : []),
+        ...(serpContext.peopleAlsoAsk || []),
+      ]).slice(0, 6),
+      uniqueAngle: parsed.uniqueAngle || this._buildUniqueAngle(targetKeyword, serpContext),
+      entities: this._dedupeStrings([
+        ...(Array.isArray(parsed.entities) ? parsed.entities : []),
+        ...this._extractEntities(topResults, targetKeyword),
+      ]).slice(0, 12),
+      competitorHeadlines: this._normalizeCompetitorHeadlines(parsed.competitorHeadlines, topResults),
+      _source: provider,
+    };
+    return normalized;
+  }
+
+  async _saveBrief(teamId, targetKeyword, briefData, serpContext) {
+    const brief = await prisma.contentBrief.create({
+      data: {
+        teamId,
+        targetKeyword,
+        title: briefData.title,
+        metaDescription: briefData.metaDescription || null,
+        targetWordCount: briefData.targetWordCount || null,
+        searchIntent: briefData.searchIntent || null,
+        outline: briefData.outline || [],
+        relatedKeywords: briefData.relatedKeywords || [],
+        peopleAlsoAsk: briefData.peopleAlsoAsk || [],
+        titleOptions: briefData.titleOptions || [],
+        competitorAngle: briefData.competitorAngle || null,
+        uniqueAngle: briefData.uniqueAngle || null,
+        callToAction: briefData.callToAction || null,
+        entities: briefData.entities || [],
+        competitorHeadlines: briefData.competitorHeadlines || [],
+        source: briefData._source || 'fallback',
+        status: 'draft',
+      },
+    });
+
+    return {
+      ...brief,
+      serpContext,
+      semanticTerms: briefData.semanticTerms || [],
+      relatedKeywordsEnriched: briefData.relatedKeywordsEnriched || [],
+      _source: briefData._source || 'fallback',
+    };
   }
 
   _buildTitleOptions(keyword) {
@@ -337,6 +385,177 @@ Rules:
       `How to Win With ${cap}`,
       `${cap} Strategy: What Actually Works`,
     ];
+  }
+
+  _buildSerpTitleOptions(keyword, serpContext = {}) {
+    const topResults = serpContext.topResults || [];
+    const noun = keyword.charAt(0).toUpperCase() + keyword.slice(1);
+    const firstCompetitor = topResults[0]?.title || `${noun} guide`;
+    return [
+      `${noun}: The Practical Playbook for ${new Date().getFullYear()}`,
+      `${noun} Compared: What the Top Results Miss`,
+      `How to Choose the Right ${noun} Strategy`,
+      `Before You Invest in ${noun}, Read This`,
+      `What Actually Works for ${noun} Right Now`,
+      `A Better ${noun} Guide Than "${firstCompetitor}"`,
+    ];
+  }
+
+  _normalizeOutline(outline, keyword, serpContext) {
+    if (!Array.isArray(outline) || !outline.length) {
+      return this._buildDeterministicSerpOutline(keyword, serpContext, []);
+    }
+
+    return outline
+      .filter((section) => section && typeof section.heading === 'string')
+      .map((section) => ({
+        heading: section.heading.trim(),
+        subpoints: Array.isArray(section.subpoints)
+          ? section.subpoints.map((point) => String(point).trim()).filter(Boolean).slice(0, 6)
+          : [],
+      }))
+      .filter((section) => section.heading)
+      .slice(0, 10);
+  }
+
+  _normalizeCompetitorHeadlines(raw, topResults = []) {
+    if (Array.isArray(raw) && raw.length) {
+      return raw.slice(0, 5).map((item) => ({
+        title: item?.title || '',
+        url: item?.url || item?.link || '',
+        headings: Array.isArray(item?.headings) ? item.headings.slice(0, 5) : [],
+      })).filter((item) => item.title);
+    }
+
+    return topResults.slice(0, 3).map((result) => ({
+      title: result.title,
+      url: result.link,
+      headings: (result.headings || []).slice(0, 5),
+    }));
+  }
+
+  _buildDeterministicSerpOutline(keyword, serpContext = {}, semanticTerms = []) {
+    const topResults = serpContext.topResults || [];
+    const sections = [];
+    const seen = new Set();
+
+    for (const result of topResults) {
+      for (const heading of result.headings || []) {
+        const normalized = heading.trim();
+        const lower = normalized.toLowerCase();
+        if (!normalized || normalized.length < 12) continue;
+        if (lower === keyword.toLowerCase()) continue;
+        if (lower.startsWith('what is ') || lower.startsWith('what are ')) continue;
+        if (seen.has(lower)) continue;
+        seen.add(lower);
+        sections.push({
+          heading: normalized,
+          subpoints: this._deriveSubpointsFromHeading(normalized, keyword, result),
+        });
+        if (sections.length >= 6) break;
+      }
+      if (sections.length >= 6) break;
+    }
+
+    if (serpContext.peopleAlsoAsk?.length) {
+      sections.push({
+        heading: `Questions buyers ask about ${keyword}`,
+        subpoints: serpContext.peopleAlsoAsk.slice(0, 4),
+      });
+    }
+
+    if (!sections.length) {
+      return this._generateOutline(keyword, semanticTerms);
+    }
+
+    return sections.slice(0, 8);
+  }
+
+  _deriveSubpointsFromHeading(heading, keyword, result = {}) {
+    const snippet = result.snippet || '';
+    const candidates = [
+      snippet,
+      `Explain how ${heading.toLowerCase()} affects ${keyword}.`,
+      `Add examples, benchmarks, or screenshots to make "${heading}" more actionable.`,
+      `Show what the current ranking pages cover and where this section can go deeper.`,
+    ];
+    return this._dedupeStrings(candidates).slice(0, 4);
+  }
+
+  _inferIntentFromSerp(keyword, serpContext = {}) {
+    const haystack = [
+      keyword,
+      ...(serpContext.relatedSearches || []),
+      ...((serpContext.topResults || []).map((result) => result.title || '')),
+    ].join(' ').toLowerCase();
+
+    if (/(buy|pricing|price|software|tool|service|agency|best|top|vs|compare|review)/.test(haystack)) return 'commercial';
+    if (/(sign in|login|homepage|official|docs|documentation|youtube|reddit|linkedin)/.test(haystack)) return 'navigational';
+    if (/(template|download|hire|book|demo|get started|trial)/.test(haystack)) return 'transactional';
+    return 'informational';
+  }
+
+  _estimateSerpWordCount(avgDifficulty, topResults = []) {
+    const wordCounts = topResults.map((result) => Number(result.wordCount) || 0).filter(Boolean);
+    if (wordCounts.length) {
+      const average = Math.round(wordCounts.reduce((sum, count) => sum + count, 0) / wordCounts.length);
+      return Math.max(1200, Math.min(4000, average + 150));
+    }
+    return this._estimateWordCount(avgDifficulty);
+  }
+
+  _buildMetaDescription(keyword, serpContext = {}) {
+    const firstPaa = serpContext.peopleAlsoAsk?.[0];
+    if (firstPaa) {
+      return `A practical guide to ${keyword} with competitor insights, key questions, and the angles needed to outperform current top-ranking pages.`;
+    }
+    return `A practical guide to ${keyword} built from real SERP research, competitor headings, and the questions searchers are already asking.`;
+  }
+
+  _buildCompetitorAngle(topResults = [], keyword) {
+    if (!topResults.length) {
+      return `Publish a stronger ${keyword} page by adding more specificity, examples, and decision-making guidance than the existing ranking content.`;
+    }
+    const titles = topResults.slice(0, 3).map((result) => `"${result.title}"`).join(', ');
+    return `Current leaders like ${titles} cover the topic broadly. Beat them by matching their core sections, tightening the structure, and adding clearer examples, comparisons, and proof points.`;
+  }
+
+  _buildUniqueAngle(keyword, serpContext = {}) {
+    const headings = (serpContext.topResults || []).flatMap((result) => result.headings || []).map((heading) => heading.toLowerCase());
+    if (!headings.some((heading) => heading.includes('mistake'))) {
+      return `Add a "common ${keyword} mistakes" section with concrete examples from the market.`;
+    }
+    if (!headings.some((heading) => heading.includes('compare') || heading.includes('vs'))) {
+      return `Add a comparison section that helps readers evaluate ${keyword} options instead of just explaining the concept.`;
+    }
+    return `Add proof-driven examples, benchmarks, and screenshots that the current top pages do not show clearly.`;
+  }
+
+  _extractEntities(topResults = [], keyword) {
+    const candidates = [];
+    for (const result of topResults) {
+      if (result.domain) candidates.push(result.domain);
+      for (const heading of result.headings || []) {
+        const matches = String(heading).match(/\b[A-Z][a-zA-Z0-9+-]{2,}\b/g) || [];
+        candidates.push(...matches);
+      }
+    }
+    return this._dedupeStrings(candidates)
+      .filter((term) => term.toLowerCase() !== keyword.toLowerCase())
+      .slice(0, 12);
+  }
+
+  _dedupeStrings(values = []) {
+    const seen = new Set();
+    const output = [];
+    for (const value of values) {
+      const text = String(value || '').trim();
+      const key = text.toLowerCase();
+      if (!text || seen.has(key)) continue;
+      seen.add(key);
+      output.push(text);
+    }
+    return output;
   }
 
   _clusterRelated(target, keywords) {

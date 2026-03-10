@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Globe, Search, Plus, Trash2, TrendingUp, Target, Copy, ChevronRight,
-  AlertCircle, Zap, Loader2, Sparkles, DollarSign, Key, FlaskConical, Download,
+  AlertCircle, Zap, Loader2, Sparkles, DollarSign, Key, FlaskConical, Download, ChevronDown,
 } from 'lucide-react';
 import { exportToCSV } from '../lib/exportCsv';
 import api from '../lib/api';
@@ -218,11 +218,30 @@ function normalizeMarketResearchResult(data = {}) {
   };
 }
 
+function SavedReportCard({ title, subtitle, isExpanded, onToggle, children }) {
+  return (
+    <div className="card">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between gap-3 text-left"
+      >
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-text-primary truncate">{title}</p>
+          {subtitle && <p className="text-xs text-text-secondary mt-1">{subtitle}</p>}
+        </div>
+        {isExpanded ? <ChevronDown className="w-4 h-4 text-text-secondary rotate-180 transition-transform" /> : <ChevronDown className="w-4 h-4 text-text-secondary transition-transform" />}
+      </button>
+      {isExpanded && <div className="mt-4">{children}</div>}
+    </div>
+  );
+}
+
 function MarketResearchSection() {
   const toast = useToast();
   const queryClient = useQueryClient();
   const [url, setUrl] = useState('');
   const [result, setResult] = useState(null);
+  const [expandedReportId, setExpandedReportId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [step, setStep] = useState(0);
@@ -235,13 +254,19 @@ function MarketResearchSection() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: marketReports = [] } = useQuery({
+    queryKey: ['research', 'reports', 'market'],
+    queryFn: () => api.get('/research/reports?kind=market&limit=8').then((r) => r.data.data.reports || []),
+    staleTime: 60 * 1000,
+  });
+
   useEffect(() => {
     if (!latestMarketReport?.analysis) return;
     setResult(normalizeMarketResearchResult({
       ...latestMarketReport.analysis,
       savedAt: latestMarketReport.createdAt,
     }));
-    if (latestMarketReport.query) setUrl(latestMarketReport.query);
+    setExpandedReportId((current) => current ?? latestMarketReport.id);
   }, [latestMarketReport]);
 
   const analyze = async () => {
@@ -255,7 +280,10 @@ function MarketResearchSection() {
       const res = await api.post('/competitors/analyze', { url: url.trim() });
       const data = res.data.data;
       setResult(normalizeMarketResearchResult(data));
+      setUrl('');
+      setExpandedReportId(data.reportId || null);
       queryClient.invalidateQueries({ queryKey: ['research', 'latest', 'market'] });
+      queryClient.invalidateQueries({ queryKey: ['research', 'reports', 'market'] });
       requestAnimationFrame(() => {
         resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
@@ -319,143 +347,70 @@ function MarketResearchSection() {
         )}
       </div>
 
-      {result && (
+      {(marketReports.length > 0 || result) && (
         <div ref={resultRef} className="space-y-4">
-          {result.crawlFailed && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs">
-              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-              Demo data shown — site blocked automated crawl. Add as competitor for ongoing tracking.
-            </div>
-          )}
-
-          {result.savedAt && (
-            <div className="text-xs text-text-secondary">
-              Saved {new Date(result.savedAt).toLocaleString()}
-            </div>
-          )}
-
-          {/* Site overview */}
-          <div className="card">
-            <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1">{result.domain}</p>
-            <p className="text-sm text-text-primary font-medium">{result.title}</p>
-            {result.description && <p className="text-xs text-text-secondary mt-1 line-clamp-2">{result.description}</p>}
-            {result.threatLevel && <p className="text-xs text-accent-blue mt-2">Threat level: {result.threatLevel}</p>}
-            {result.techStack.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-2">
-                {result.techStack.slice(0, 6).map(t => (
-                  <span key={t} className="text-xs px-2 py-0.5 rounded bg-bg-surface border border-border text-text-secondary">{t}</span>
-                ))}
-              </div>
-            )}
-
-            {result.contentTypes.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-2">
-                {result.contentTypes.map((type) => (
-                  <span key={type} className="text-xs px-2 py-0.5 rounded bg-accent-blue/10 border border-accent-blue/20 text-accent-blue">{type}</span>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="grid sm:grid-cols-2 gap-4">
-            {/* Their headlines / page structure */}
-            {result.headlines.length > 0 && (
-              <div className="card">
-                <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-3">Content Strategy (Their Headlines)</p>
-                <div className="space-y-1.5">
-                  {result.headlines.map((h, i) => (
-                    <div key={i} className="flex items-start gap-2 text-xs text-text-secondary leading-relaxed">
-                      <ChevronRight className="w-3 h-3 text-accent-blue shrink-0 mt-0.5" />{h}
+          {marketReports.map((report) => {
+            const savedResult = normalizeMarketResearchResult({
+              ...(report.analysis || {}),
+              savedAt: report.createdAt,
+            });
+            const expanded = expandedReportId === report.id;
+            return (
+              <SavedReportCard
+                key={report.id}
+                title={savedResult.title || savedResult.domain || report.query}
+                subtitle={`${report.query} • ${new Date(report.createdAt).toLocaleString()}`}
+                isExpanded={expanded}
+                onToggle={() => setExpandedReportId(expanded ? null : report.id)}
+              >
+                <div className="space-y-4">
+                  {savedResult.crawlFailed && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      Demo data shown — site blocked automated crawl. Add as competitor for ongoing tracking.
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                  )}
 
-            {/* CTAs */}
-            {result.ctas.length > 0 && (
-              <div className="card">
-                <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-3">Their Conversion CTAs</p>
-                <div className="space-y-1.5">
-                  {result.ctas.map((c, i) => (
-                    <div key={i} className="flex items-center gap-2 text-sm text-text-secondary">
-                      <ChevronRight className="w-3 h-3 text-accent-blue shrink-0" />{c}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                  <div className="text-xs text-text-secondary">
+                    Saved {new Date(savedResult.savedAt).toLocaleString()}
+                  </div>
 
-            {/* Top keywords */}
-            {result.topKeywords.length > 0 && (
-              <div className="card">
-                <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-3">Keywords They Target</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {result.topKeywords.map((kw) => (
-                    <span key={kw} className="text-xs px-2.5 py-1 rounded-full border border-border text-text-secondary">{kw}</span>
-                  ))}
-                </div>
-              </div>
-            )}
+                  <div className="card">
+                    <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1">{savedResult.domain}</p>
+                    <p className="text-sm text-text-primary font-medium">{savedResult.title}</p>
+                    {savedResult.description && <p className="text-xs text-text-secondary mt-1 line-clamp-2">{savedResult.description}</p>}
+                    {savedResult.threatLevel && <p className="text-xs text-accent-blue mt-2">Threat level: {savedResult.threatLevel}</p>}
+                  </div>
 
-            {result.topics.length > 0 && (
-              <div className="card">
-                <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-3">Topical Coverage</p>
-                <div className="space-y-1.5">
-                  {result.topics.slice(0, 6).map((topic, i) => (
-                    <div key={i} className="text-xs text-text-secondary">
-                      {(topic.keyword || topic.word || topic)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    {savedResult.topKeywords.length > 0 && (
+                      <div className="card">
+                        <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-3">Keywords They Target</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {savedResult.topKeywords.map((kw) => (
+                            <span key={kw} className="text-xs px-2.5 py-1 rounded-full border border-border text-text-secondary">{kw}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
-            {/* Messaging angles */}
-            {result.messagingAngles.length > 0 && (
-              <div className="card">
-                <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-3">Messaging Angles</p>
-                <div className="space-y-1.5">
-                  {result.messagingAngles.map((a, i) => (
-                    <div key={i} className="flex items-start gap-2 text-sm text-text-secondary">
-                      <Sparkles className="w-3.5 h-3.5 text-purple-400 mt-0.5 shrink-0" />{a}
-                    </div>
-                  ))}
+                    {savedResult.weaknesses.length > 0 && (
+                      <div className="card">
+                        <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-3">Weaknesses to Exploit</p>
+                        <div className="space-y-1.5">
+                          {savedResult.weaknesses.map((w, i) => (
+                            <div key={i} className="flex items-start gap-2 text-sm text-text-secondary">
+                              <Target className="w-3.5 h-3.5 text-accent-green mt-0.5 shrink-0" />{w}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
-
-            {/* Weaknesses to exploit */}
-            {result.weaknesses.length > 0 && (
-              <div className="card">
-                <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-3">
-                  Weaknesses to Exploit
-                  {result.hasAiInsights && <span className="ml-2 text-accent-purple font-normal normal-case">(AI)</span>}
-                </p>
-                <div className="space-y-1.5">
-                  {result.weaknesses.map((w, i) => (
-                    <div key={i} className="flex items-start gap-2 text-sm text-text-secondary">
-                      <Target className="w-3.5 h-3.5 text-accent-green mt-0.5 shrink-0" />{w}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Keyword gaps */}
-            {result.keywordGaps.length > 0 && (
-              <div className="card sm:col-span-2">
-                <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-3">Keyword Gaps</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {result.keywordGaps.map((g, i) => (
-                    <span key={i} className="text-xs px-2.5 py-1 rounded-full bg-accent-purple/10 border border-accent-purple/20 text-accent-purple">
-                      {typeof g === 'string' ? g : g.keyword}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+              </SavedReportCard>
+            );
+          })}
         </div>
       )}
     </div>
@@ -470,6 +425,7 @@ function AdIntelSection() {
   const queryClient  = useQueryClient();
   const [url, setUrl]         = useState('');
   const [result, setResult]   = useState(null);
+  const [expandedReportId, setExpandedReportId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [step, setStep]       = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
@@ -480,13 +436,19 @@ function AdIntelSection() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const { data: adIntelReports = [] } = useQuery({
+    queryKey: ['research', 'reports', 'ad-intelligence'],
+    queryFn: () => api.get('/research/reports?kind=ad-intelligence&limit=8').then((r) => r.data.data.reports || []),
+    staleTime: 60 * 1000,
+  });
+
   useEffect(() => {
     if (!latestAdIntelReport?.analysis) return;
     setResult({
       ...latestAdIntelReport.analysis,
       savedAt: latestAdIntelReport.createdAt,
     });
-    if (latestAdIntelReport.query) setUrl(latestAdIntelReport.query);
+    setExpandedReportId((current) => current ?? latestAdIntelReport.id);
   }, [latestAdIntelReport]);
 
   const research = async () => {
@@ -502,7 +464,10 @@ function AdIntelSection() {
       const res = await api.get(`/research/hijack-analysis?domain=${encodeURIComponent(url.trim())}`);
       clearInterval(interval);
       setResult(res.data.data);
+      setUrl('');
+      setExpandedReportId(res.data.data.reportId || null);
       queryClient.invalidateQueries({ queryKey: ['research', 'latest', 'ad-intelligence'] });
+      queryClient.invalidateQueries({ queryKey: ['research', 'reports', 'ad-intelligence'] });
     } catch (err) {
       clearInterval(interval);
       const message = err?.response?.data?.error?.message || 'Analysis failed';
@@ -570,114 +535,84 @@ function AdIntelSection() {
         )}
       </div>
 
-      {result && !loading && (
+      {(adIntelReports.length > 0 || result) && !loading && (
         <div className="space-y-4">
-          {result.savedAt && (
-            <div className="text-xs text-text-secondary">
-              Saved {new Date(result.savedAt).toLocaleString()}
-            </div>
-          )}
+          {adIntelReports.map((report) => {
+            const savedResult = { ...(report.analysis || {}), savedAt: report.createdAt };
+            const expanded = expandedReportId === report.id;
+            return (
+              <SavedReportCard
+                key={report.id}
+                title={savedResult.domain || report.query}
+                subtitle={`${report.query} • ${new Date(report.createdAt).toLocaleString()}`}
+                isExpanded={expanded}
+                onToggle={() => setExpandedReportId(expanded ? null : report.id)}
+              >
+                <div className="space-y-4">
+                  <div className="text-xs text-text-secondary">
+                    Saved {new Date(savedResult.savedAt).toLocaleString()}
+                  </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="card text-center py-3">
-              <p className="text-lg font-bold text-text-primary">{result.estimatedAdSpend}</p>
-              <p className="text-xs text-text-secondary">Est. Ad Spend</p>
-            </div>
-            <div className="card text-center py-3">
-              <p className="text-lg font-bold text-text-primary">{result.topKeywords?.length ?? 0}</p>
-              <p className="text-xs text-text-secondary">Keywords Found</p>
-            </div>
-            <div className="card text-center py-3">
-              <p className="text-lg font-bold text-text-primary">{result.winbackOpportunities?.length ?? 0}</p>
-              <p className="text-xs text-text-secondary">Opportunities</p>
-            </div>
-          </div>
-
-          {/* Ad examples */}
-          <div>
-            <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Competitor Ads Running Now</h4>
-            <div className="space-y-2">
-              {(result.adExamples ?? []).map((ad, i) => (
-                <div key={i} className="card group">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Badge status={ad.platform.toLowerCase()} />
-                      </div>
-                      <p className="text-sm font-semibold text-accent-blue">{ad.headline}</p>
-                      <p className="text-xs text-text-secondary mt-1 leading-relaxed">{ad.description}</p>
-                      <p className="text-xs text-accent-green mt-1">CTA: {ad.cta}</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="card text-center py-3">
+                      <p className="text-lg font-bold text-text-primary">{savedResult.estimatedAdSpend}</p>
+                      <p className="text-xs text-text-secondary">Est. Ad Spend</p>
                     </div>
-                    <button
-                      onClick={() => { navigator.clipboard.writeText(`${ad.headline}\n${ad.description}`); toast.success('Copied'); }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-xs text-text-secondary hover:text-accent-blue shrink-0"
-                    >
-                      <Copy className="w-3.5 h-3.5" />Copy
-                    </button>
+                    <div className="card text-center py-3">
+                      <p className="text-lg font-bold text-text-primary">{savedResult.topKeywords?.length ?? 0}</p>
+                      <p className="text-xs text-text-secondary">Keywords Found</p>
+                    </div>
+                    <div className="card text-center py-3">
+                      <p className="text-lg font-bold text-text-primary">{savedResult.winbackOpportunities?.length ?? 0}</p>
+                      <p className="text-xs text-text-secondary">Opportunities</p>
+                    </div>
+                  </div>
+
+                  {savedResult.researchBasis?.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Research Basis</h4>
+                      <div className="space-y-2">
+                        {savedResult.researchBasis.map((item, i) => (
+                          <div key={i} className="card text-xs text-text-secondary">{item}</div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {savedResult.attackVectors?.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Attack Vectors</h4>
+                      <div className="space-y-2">
+                        {savedResult.attackVectors.map((vector, i) => (
+                          <div key={i} className="card space-y-1.5">
+                            <p className="text-sm font-semibold text-text-primary">{vector.title}</p>
+                            <p className="text-xs text-text-secondary">{vector.evidence}</p>
+                            <p className="text-xs text-accent-blue">{vector.move}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Win-back Opportunities</h4>
+                    <div className="space-y-2">
+                      {(savedResult.winbackOpportunities ?? []).map((opp, i) => (
+                        <div key={i} className="card space-y-1.5">
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-accent-purple/10 text-accent-purple border border-accent-purple/20 font-medium inline-block">{opp.angle}</span>
+                          <p className="text-sm font-semibold text-text-primary">{opp.suggestedHeadline}</p>
+                          <p className="text-xs text-text-secondary leading-relaxed">{opp.reason}</p>
+                          {opp.action && <p className="text-xs text-accent-blue">Move: {opp.action}</p>}
+                          {opp.targetKeyword && <p className="text-[11px] text-text-secondary">Target keyword: {opp.targetKeyword}</p>}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
+              </SavedReportCard>
+            );
+          })}
 
-          {/* Keyword gaps */}
-          <div>
-            <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Keyword Gaps</h4>
-            <div className="card p-0 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border bg-bg-secondary/30">
-                      {['Keyword', 'Their Rank', 'Your Rank', 'Volume', ''].map((h) => (
-                        <th key={h} className="text-left text-xs text-text-secondary font-medium px-4 py-2.5">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {(result.keywordGaps ?? []).map((g, i) => (
-                      <tr key={i} className="hover:bg-bg-secondary/20">
-                        <td className="px-4 py-2.5 text-text-primary text-xs font-medium">{g.keyword}</td>
-                        <td className="px-4 py-2.5 text-accent-green text-xs font-semibold">#{g.theirRank}</td>
-                        <td className="px-4 py-2.5 text-xs">
-                          {g.yourRank ? <span className="text-yellow-400">#{g.yourRank}</span> : <span className="text-text-secondary italic">Not ranking</span>}
-                        </td>
-                        <td className="px-4 py-2.5 text-text-secondary text-xs">{g.volume?.toLocaleString()}/mo</td>
-                        <td className="px-4 py-2.5">
-                          <button
-                            onClick={() => addKeyword.mutate(g.keyword)}
-                            className="text-xs px-2 py-1 rounded-lg bg-accent-blue/10 hover:bg-accent-blue/20 text-accent-blue transition-colors"
-                          >
-                            Track
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-
-          {/* Win-back opportunities */}
-          <div>
-            <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Win-back Opportunities</h4>
-            <div className="space-y-2">
-              {(result.winbackOpportunities ?? []).map((opp, i) => (
-                <div key={i} className="card space-y-1.5">
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-accent-purple/10 text-accent-purple border border-accent-purple/20 font-medium inline-block">{opp.angle}</span>
-                  <p className="text-sm font-semibold text-text-primary">{opp.suggestedHeadline}</p>
-                  <p className="text-xs text-text-secondary leading-relaxed">{opp.reason}</p>
-                  <button
-                    onClick={() => { navigator.clipboard.writeText(opp.suggestedHeadline); toast.success('Headline copied'); }}
-                    className="text-xs flex items-center gap-1 text-text-secondary hover:text-accent-blue transition-colors"
-                  >
-                    <Copy className="w-3 h-3" />Copy headline
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       )}
     </div>

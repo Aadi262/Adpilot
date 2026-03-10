@@ -206,8 +206,19 @@ model ContentBrief {
   teamId          String   @map("team_id")
   targetKeyword   String   @map("target_keyword")
   title           String
+  metaDescription String?  @map("meta_description")
+  targetWordCount Int?     @map("target_word_count")
+  searchIntent    String?  @map("search_intent")
   outline         Json     @default("[]") @db.JsonB
   relatedKeywords Json     @default("[]") @db.JsonB
+  peopleAlsoAsk   Json     @default("[]") @map("people_also_ask") @db.JsonB
+  titleOptions    Json     @default("[]") @map("title_options") @db.JsonB
+  competitorAngle String?  @map("competitor_angle")
+  uniqueAngle     String?  @map("unique_angle")
+  callToAction    String?  @map("call_to_action")
+  entities        Json     @default("[]") @db.JsonB
+  competitorHeadlines Json @default("[]") @map("competitor_headlines") @db.JsonB
+  source          String?  @default("fallback")
   status          String   @default("draft")
   createdAt       DateTime @default(now()) @map("created_at")
 

@@ -9,6 +9,7 @@ router.use(authenticate);
 
 // Hijack analysis
 router.get('/hijack-analysis', ctrl.hijackAnalysis);
+router.get('/reports', ctrl.getReports);
 router.get('/reports/latest', ctrl.getLatestReport);
 
 module.exports = router;
