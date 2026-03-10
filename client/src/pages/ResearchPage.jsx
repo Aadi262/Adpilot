@@ -202,7 +202,11 @@ function normalizeMarketResearchResult(data = {}) {
     isReal: data.isReal,
     title: data.title || data.domain,
     description: data.description || '',
-    topKeywords: (data.topKeywords || []).slice(0, 8).map((k) => (typeof k === 'string' ? k : k.word || k.keyword || '')).filter(Boolean),
+    topKeywords: (data.topKeywords || []).slice(0, 8).map((k) => ({
+      keyword: typeof k === 'string' ? k : k.word || k.keyword || '',
+      position: typeof k === 'string' ? null : k.position ?? null,
+      volume: typeof k === 'string' ? null : k.volume ?? k.searchVolume ?? null,
+    })).filter((k) => k.keyword),
     headlines: (data.headings || []).slice(0, 6).map((h) => (typeof h === 'string' ? h : h.text || '')).filter(Boolean),
     techStack: data.techStack || [],
     ctas: (data.ctas || []).slice(0, 6),
@@ -386,9 +390,15 @@ function MarketResearchSection() {
                     {savedResult.topKeywords.length > 0 && (
                       <div className="card">
                         <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-3">Keywords They Target</p>
-                        <div className="flex flex-wrap gap-1.5">
+                        <div className="space-y-2">
                           {savedResult.topKeywords.map((kw) => (
-                            <span key={kw} className="text-xs px-2.5 py-1 rounded-full border border-border text-text-secondary">{kw}</span>
+                            <div key={kw.keyword} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-xs">
+                              <span className="text-text-primary font-medium">{kw.keyword}</span>
+                              <div className="flex items-center gap-3 text-text-secondary">
+                                <span>{kw.position ? `Rank #${kw.position}` : 'Rank unavailable'}</span>
+                                <span>{kw.volume ? `${kw.volume.toLocaleString()}/mo` : 'Volume unavailable'}</span>
+                              </div>
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -555,8 +565,8 @@ function AdIntelSection() {
 
                   <div className="grid grid-cols-3 gap-3">
                     <div className="card text-center py-3">
-                      <p className="text-lg font-bold text-text-primary">{savedResult.estimatedAdSpend}</p>
-                      <p className="text-xs text-text-secondary">Est. Ad Spend</p>
+                      <p className="text-lg font-bold text-text-primary">{savedResult.estimatedAdSpend || 'Unavailable'}</p>
+                      <p className="text-xs text-text-secondary">{savedResult.estimatedAdSpend ? 'Est. Ad Spend' : 'Ad Spend Data'}</p>
                     </div>
                     <div className="card text-center py-3">
                       <p className="text-lg font-bold text-text-primary">{savedResult.topKeywords?.length ?? 0}</p>
@@ -604,10 +614,32 @@ function AdIntelSection() {
                           <p className="text-xs text-text-secondary leading-relaxed">{opp.reason}</p>
                           {opp.action && <p className="text-xs text-accent-blue">Move: {opp.action}</p>}
                           {opp.targetKeyword && <p className="text-[11px] text-text-secondary">Target keyword: {opp.targetKeyword}</p>}
+                          {opp.source && <p className="text-[11px] text-text-secondary">Source: {opp.source === 'ai' ? 'AI + crawl evidence' : 'crawl evidence'}</p>}
                         </div>
                       ))}
                     </div>
                   </div>
+
+                  {savedResult.topKeywords?.length > 0 && (
+                    <div>
+                      <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Keyword Footprint</h4>
+                      <div className="space-y-2">
+                        {savedResult.topKeywords.map((kw, i) => (
+                          <div key={`${kw.keyword}-${i}`} className="card flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-text-primary">{kw.keyword}</p>
+                              <p className="text-[11px] text-text-secondary mt-1">
+                                {kw.position ? `Observed rank #${kw.position}` : 'Observed on-site keyword only'}
+                              </p>
+                            </div>
+                            <div className="text-right text-xs text-text-secondary">
+                              {kw.volume ? `${kw.volume.toLocaleString()}/mo` : 'Volume unavailable'}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </SavedReportCard>
             );

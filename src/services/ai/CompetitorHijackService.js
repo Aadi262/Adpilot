@@ -220,12 +220,14 @@ class CompetitorHijackService {
 
     return topKeywords.map((kw, idx) => {
       const keyword = kw.keyword || kw.word;
+      const position = kw.position ? `SERP position ${kw.position}` : 'no confirmed SERP rank';
+      const volume = kw.searchVolume ? `${kw.searchVolume}/mo search demand` : 'search volume unavailable';
       const cta = ctas[idx] || ctas[0] || 'Book a demo';
       return {
         title: `Capture ${keyword} demand`,
-        evidence: `They surface "${keyword}" prominently and pair it with "${cta}" in their conversion path.`,
+        evidence: `Observed keyword "${keyword}" with ${position}; ${volume}. Their conversion path leans on "${cta}".`,
         move: weaknesses[idx]
-          ? `Counter their weakness: ${weaknesses[idx]}`
+          ? `Build a counter-landing page for "${keyword}" and address this exact weakness: ${weaknesses[idx]}`
           : `Build a dedicated landing page and paid ad group around "${keyword}" with a stronger proof point than "${cta}".`,
       };
     }).filter((item) => item.title);
@@ -301,7 +303,7 @@ class CompetitorHijackService {
       primaryKeyword ? {
         angle: 'Keyword Intercept',
         suggestedHeadline: `Own "${primaryKeyword}" before they do`,
-        reason: `They visibly emphasize "${primaryKeyword}". Build a tighter landing page and ad set around that exact demand instead of broad competitor messaging.`,
+        reason: `They visibly emphasize "${primaryKeyword}" on-page. Attack the same demand with a tighter page, stronger proof, and a more direct CTA than their current journey.`,
         action: `Launch a dedicated ${primaryKeyword} comparison page and pair it with exact-match search ads.`,
         targetKeyword: primaryKeyword,
         source: weaknesses.length ? 'ai' : 'crawl',
@@ -309,7 +311,7 @@ class CompetitorHijackService {
       {
         angle: 'CTA Counter',
         suggestedHeadline: `Beat their "${primaryCta}" offer`,
-        reason: `Their conversion path leans on "${primaryCta}". Counter with a stronger CTA that reduces friction and makes the next step clearer.`,
+        reason: `Their conversion path leans on "${primaryCta}". Replace that with a lower-friction CTA and an immediate proof element so the value is clearer above the fold.`,
         action: `Test a direct-response alternative to "${primaryCta}" such as "${secondaryCta}" with proof and urgency near the fold.`,
         targetKeyword: secondaryKeyword,
         source: weaknesses.length ? 'ai' : 'crawl',
@@ -318,8 +320,8 @@ class CompetitorHijackService {
         angle: 'Messaging Gap',
         suggestedHeadline: `Turn "${headlineAnchor.substring(0, 38)}" into your angle`,
         reason: weaknesses[0]
-          ? `Their weakness is clear: ${weaknesses[0]}. Position against that gap with concrete proof, pricing clarity, or faster onboarding.`
-          : `Their current headline focus is "${headlineAnchor}". Reframe the same category promise with a sharper outcome and clearer differentiation.`,
+          ? `Their weakness is clear: ${weaknesses[0]}. Turn that weakness into the lead message and support it with pricing clarity, proof, or faster onboarding.`
+          : `Their current headline focus is "${headlineAnchor}". Reframe the same category promise with a sharper outcome, evidence, and a more specific buyer promise.`,
         action: `Build one counter-campaign that directly addresses the missing promise in their current positioning.`,
         targetKeyword: secondaryKeyword || primaryKeyword,
         source: weaknesses.length ? 'ai' : 'crawl',

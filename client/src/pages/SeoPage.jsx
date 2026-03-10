@@ -1720,8 +1720,8 @@ function KeywordsTab() {
               onClick={() => exportToCSV(
                 (keywords ?? []).map(k => ({
                   keyword: k.keyword,
-                  rank: k.currentRank ?? '—',
-                  prev: k.previousRank ?? '—',
+                  rank: k.currentRank ?? '',
+                  prev: k.previousRank ?? '',
                   url: k.trackedUrl ?? '',
                   active: k.isActive ? 'Yes' : 'No',
                 })),

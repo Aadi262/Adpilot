@@ -273,25 +273,7 @@ function ReportModal({ onClose }) {
 
   const copyText = () => {
     if (!report) return;
-    const ov = report.overview ?? {};
-    const txt = [
-      `AdPilot Report — ${report.range} (generated ${new Date(report.generatedAt).toLocaleDateString()})`,
-      '',
-      `Health Score: ${(ov.health || {}).score ?? 'N/A'}/100 (${(ov.health || {}).label ?? ''})`,
-      `Total Spend: $${(ov.totalSpend || 0).toFixed(2)}`,
-      `Total Revenue: $${(ov.totalRevenue || 0).toFixed(2)}`,
-      `Avg ROAS: ${ov.avgROAS || 0}x`,
-      `Overall CTR: ${ov.overallCTR || 0}%`,
-      `Conversions: ${ov.totalConversions || 0}`,
-      `Active Campaigns: ${ov.activeCampaigns || 0}/${ov.totalCampaigns || 0}`,
-      '',
-      `SEO Audits: ${(report.seoAudits || []).length}`,
-      `Keywords Tracked: ${(report.keywords || {}).total || 0}`,
-      `Competitors: ${(report.competitors || {}).total || 0}`,
-      `Budget Alerts: ${report.alertsFired || 0}`,
-      '',
-      report.aiSummary ? `AI Summary: ${report.aiSummary.summary || ''}` : '',
-    ].filter(Boolean).join('\n');
+    const txt = report.reportMarkdown || '';
 
     navigator.clipboard.writeText(txt).then(() => {
       setCopied(true);
@@ -305,6 +287,15 @@ function ReportModal({ onClose }) {
   const ov = report?.overview ?? {};
   const healthScore = (ov.health || {}).score ?? 0;
   const healthColor = healthScore >= 75 ? '#10b981' : healthScore >= 50 ? '#f59e0b' : '#ef4444';
+  const seoHealth = report?.seoHealthScore ?? {};
+  const keywordRows = report?.keywordPerformance ?? [];
+  const competitorRows = report?.competitorMatrix ?? [];
+  const contentRows = report?.contentRecommendations ?? [];
+  const technicalRows = report?.technicalIssues ?? [];
+  const actionRows = report?.actionPlan ?? [];
+
+  const colorForStatus = (status) =>
+    status === 'green' ? '#10b981' : status === 'yellow' ? '#f59e0b' : '#ef4444';
 
   return (
     <div style={{
@@ -440,22 +431,7 @@ function ReportModal({ onClose }) {
               ))}
             </div>
 
-            {/* Other sections */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
-              <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '12px 14px' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.5)', marginBottom: 8 }}>SEO</div>
-                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>Audits run: {(report.seoAudits || []).length}</div>
-                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>Keywords: {(report.keywords || {}).total || 0}</div>
-              </div>
-              <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '12px 14px' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.5)', marginBottom: 8 }}>Intelligence</div>
-                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>Competitors: {(report.competitors || {}).total || 0}</div>
-                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>Budget alerts: {report.alertsFired || 0}</div>
-              </div>
-            </div>
-
-            {/* AI summary */}
-            {report.aiSummary && (
+            {report.executiveSummary && (
               <div style={{
                 background: 'rgba(139,92,246,0.08)',
                 border: '1px solid rgba(139,92,246,0.2)',
@@ -463,23 +439,142 @@ function ReportModal({ onClose }) {
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
                   <Sparkles size={13} color="#a78bfa" />
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.07em' }}>AI Executive Summary</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Executive Summary</span>
                 </div>
                 <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.75)', lineHeight: 1.6, margin: 0 }}>
-                  {report.aiSummary.summary}
+                  {report.executiveSummary.overview}
                 </p>
-                {report.aiSummary.highlight && (
-                  <div style={{ marginTop: 10, padding: '8px 12px', background: 'rgba(16,185,129,0.08)', borderRadius: 8, fontSize: 12, color: '#6ee7b7' }}>
-                    Win: {report.aiSummary.highlight}
-                  </div>
-                )}
-                {report.aiSummary.warning && (
-                  <div style={{ marginTop: 8, padding: '8px 12px', background: 'rgba(239,68,68,0.08)', borderRadius: 8, fontSize: 12, color: '#fca5a5' }}>
-                    Risk: {report.aiSummary.warning}
-                  </div>
+                {report.executiveSummary.findings && (
+                  <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', lineHeight: 1.6, margin: '10px 0 0' }}>
+                    {report.executiveSummary.findings}
+                  </p>
                 )}
               </div>
             )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+              <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '12px 14px' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.5)', marginBottom: 8 }}>SEO Health Breakdown</div>
+                {[
+                  ['Technical SEO', seoHealth.technicalSeo],
+                  ['Content Quality', seoHealth.contentQuality],
+                  ['Keyword Coverage', seoHealth.keywordCoverage],
+                  ['Backlink Profile', seoHealth.backlinkProfile],
+                ].map(([label, value]) => (
+                  <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 6 }}>
+                    <span>{label}</span>
+                    <span style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 700 }}>{value ?? 0}/100</span>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '12px 14px' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.5)', marginBottom: 8 }}>Priority Actions</div>
+                {(report.executiveSummary?.recommendedActions || []).slice(0, 4).map((item, idx) => (
+                  <div key={idx} style={{ fontSize: 12, color: 'rgba(255,255,255,0.72)', marginTop: idx === 0 ? 0 : 8, lineHeight: 1.45 }}>
+                    {idx + 1}. {item}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+              <div style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.18)', borderRadius: 10, padding: '12px 14px' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#6ee7b7', marginBottom: 8 }}>Top Opportunities</div>
+                {(report.executiveSummary?.topOpportunities || []).map((item, idx) => (
+                  <div key={idx} style={{ fontSize: 12, color: 'rgba(255,255,255,0.72)', marginTop: idx === 0 ? 0 : 8, lineHeight: 1.45 }}>
+                    {item}
+                  </div>
+                ))}
+              </div>
+              <div style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.18)', borderRadius: 10, padding: '12px 14px' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#fca5a5', marginBottom: 8 }}>Top Threats</div>
+                {(report.executiveSummary?.topThreats || []).map((item, idx) => (
+                  <div key={idx} style={{ fontSize: 12, color: 'rgba(255,255,255,0.72)', marginTop: idx === 0 ? 0 : 8, lineHeight: 1.45 }}>
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.5)', marginBottom: 8 }}>Keyword Performance</div>
+              <div style={{ border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, overflow: 'hidden' }}>
+                {(keywordRows.length ? keywordRows.slice(0, 8) : []).map((row, idx) => (
+                  <div key={row.keyword} style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1.5fr 0.6fr 0.6fr 0.7fr 0.8fr',
+                    gap: 10,
+                    padding: '11px 14px',
+                    borderTop: idx === 0 ? 'none' : '1px solid rgba(255,255,255,0.05)',
+                    background: idx % 2 === 0 ? 'rgba(255,255,255,0.025)' : 'rgba(255,255,255,0.015)',
+                    alignItems: 'center',
+                  }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.88)' }}>{row.keyword}</div>
+                      <div style={{ fontSize: 11, color: colorForStatus(row.status), marginTop: 2 }}>{row.trend} • {row.intent}</div>
+                    </div>
+                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.72)' }}>{row.volume ?? '—'}</div>
+                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.72)' }}>{row.position ?? '—'}</div>
+                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.72)' }}>{row.difficulty ?? '—'}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: colorForStatus(row.status) }}>{row.opportunity ?? '—'}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+              <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '12px 14px' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.5)', marginBottom: 8 }}>Competitor Comparison</div>
+                {competitorRows.length ? competitorRows.map((row, idx) => (
+                  <div key={idx} style={{ fontSize: 12, color: 'rgba(255,255,255,0.72)', marginTop: idx === 0 ? 0 : 10, lineHeight: 1.45 }}>
+                    <div style={{ color: 'rgba(255,255,255,0.88)', fontWeight: 700 }}>{row.competitor}</div>
+                    <div>Keywords: {row.keywordCount ?? 'Unavailable'}</div>
+                    <div>Top content/topic: {row.topContent || 'Unavailable'}</div>
+                    <div>Ad spend: {row.adSpend || 'Unavailable'}</div>
+                  </div>
+                )) : <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>No competitor data available yet.</div>}
+              </div>
+
+              <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '12px 14px' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.5)', marginBottom: 8 }}>Content Recommendations</div>
+                {contentRows.length ? contentRows.map((row, idx) => (
+                  <div key={idx} style={{ fontSize: 12, color: 'rgba(255,255,255,0.72)', marginTop: idx === 0 ? 0 : 10, lineHeight: 1.45 }}>
+                    <div style={{ color: 'rgba(255,255,255,0.88)', fontWeight: 700 }}>{row.topic}</div>
+                    <div>Keyword: {row.targetKeyword}</div>
+                    <div>Traffic potential: {row.estimatedTrafficPotential ?? 'Unavailable'}</div>
+                    <div>Difficulty: {row.difficulty ?? 'Unavailable'}</div>
+                  </div>
+                )) : <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>No content opportunities available yet.</div>}
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+              <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '12px 14px' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.5)', marginBottom: 8 }}>Technical Issues</div>
+                {technicalRows.length ? technicalRows.slice(0, 5).map((row, idx) => (
+                  <div key={idx} style={{ fontSize: 12, color: 'rgba(255,255,255,0.72)', marginTop: idx === 0 ? 0 : 10, lineHeight: 1.45 }}>
+                    <div style={{ color: 'rgba(255,255,255,0.88)', fontWeight: 700 }}>{row.issue}</div>
+                    <div>{row.url}</div>
+                    <div>Severity: {row.severity}</div>
+                    <div>{row.recommendation}</div>
+                  </div>
+                )) : <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>No technical issues available yet.</div>}
+              </div>
+
+              <div style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '12px 14px' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.5)', marginBottom: 8 }}>Action Plan</div>
+                {actionRows.map((row, idx) => (
+                  <div key={idx} style={{ fontSize: 12, color: 'rgba(255,255,255,0.72)', marginTop: idx === 0 ? 0 : 10, lineHeight: 1.45 }}>
+                    <div style={{ color: row.priority === 'critical' ? '#fca5a5' : row.priority === 'important' ? '#fcd34d' : '#93c5fd', fontWeight: 700, textTransform: 'uppercase' }}>
+                      {row.priority}
+                    </div>
+                    <div style={{ color: 'rgba(255,255,255,0.88)', fontWeight: 700, marginTop: 2 }}>{row.title}</div>
+                    <div>{row.detail}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
 
             {/* Export actions */}
             <div style={{ display: 'flex', gap: 10 }}>
