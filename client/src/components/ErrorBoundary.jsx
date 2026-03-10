@@ -26,20 +26,25 @@ export default class ErrorBoundary extends Component {
           </div>
           <h2 className="text-lg font-bold text-text-primary mb-2">Something went wrong</h2>
           <p className="text-sm text-text-secondary mb-6 max-w-sm">
-            An unexpected error occurred. Try refreshing the page.
+            This screen hit an unexpected issue. Refresh the page or try again in a moment.
             {process.env.NODE_ENV === 'development' && (
               <span className="block mt-2 text-xs text-red-400 font-mono">
                 {this.state.error?.message}
               </span>
             )}
           </p>
-          <button
-            onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }}
-            className="flex items-center gap-2 btn-primary"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Reload page
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }}
+              className="flex items-center gap-2 btn-primary"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Reload page
+            </button>
+            <a href="/settings" className="btn-secondary">
+              Check Settings
+            </a>
+          </div>
         </div>
       );
     }

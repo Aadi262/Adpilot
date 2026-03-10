@@ -214,9 +214,10 @@ export default function BudgetProtectionPage() {
   });
 
   const applyFixMutation = useMutation({
-    mutationFn: (campaignId) => api.post(`/campaigns/${campaignId}/pause`),
+    mutationFn: (campaignId) => api.post('/budget-ai/apply-fix', { campaignId, action: 'pause' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['campaigns'] });
+      queryClient.invalidateQueries({ queryKey: ['budget-ai', 'alerts'] });
       queryClient.invalidateQueries({ queryKey: ['budget-ai', 'scan'] });
       toast.success('Campaign paused successfully');
     },

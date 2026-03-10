@@ -66,11 +66,13 @@ export default function CompetitorHijackPage() {
   const [analysisStep, setAnalysisStep] = useState(0);
   const [result, setResult]           = useState(null);
   const [analyzing, setAnalyzing]     = useState(false);
+  const [errorMsg, setErrorMsg]       = useState('');
 
   const handleAnalyze = async () => {
     if (!domain.trim()) return;
     setAnalyzing(true);
     setResult(null);
+    setErrorMsg('');
     setAnalysisStep(0);
 
     const interval = setInterval(() => setAnalysisStep((s) => s + 1), 1200);
@@ -81,7 +83,9 @@ export default function CompetitorHijackPage() {
       setResult(res.data.data);
     } catch (err) {
       clearInterval(interval);
-      toast.error(err?.response?.data?.error?.message || 'Analysis failed');
+      const message = err?.response?.data?.error?.message || 'Analysis failed';
+      setErrorMsg(message);
+      toast.error(message);
     } finally {
       setAnalyzing(false);
     }
@@ -141,6 +145,19 @@ export default function CompetitorHijackPage() {
 
       {/* ── Analyzing animation ────────────────────────────────────────── */}
       {analyzing && <AnalyzingAnimation step={analysisStep} />}
+
+      {errorMsg && !analyzing && (
+        <div className="rounded-xl border border-red-500/20 bg-red-500/8 px-4 py-3 flex items-start justify-between gap-3">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-red-300">Competitor analysis failed</p>
+              <p className="text-xs text-text-secondary mt-1">{errorMsg}</p>
+            </div>
+          </div>
+          <button onClick={handleAnalyze} className="btn-secondary text-sm whitespace-nowrap">Try Again</button>
+        </div>
+      )}
 
       {/* ── Results ────────────────────────────────────────────────────── */}
       {result && !analyzing && (

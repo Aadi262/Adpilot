@@ -76,7 +76,7 @@ function errorHandler(err, req, res, next) {
     success: false,
     data:    null,
     error: {
-      message: isOperational ? err.message : 'Internal server error',
+      message: isOperational ? err.message : 'Something went wrong on the server. Please try again.',
       code:    err.code || null,
     },
     meta: { timestamp: new Date().toISOString(), correlationId },

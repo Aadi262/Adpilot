@@ -2317,7 +2317,7 @@ function MonitorsTab() {
   const [showAdd, setShowAdd]         = useState(false);
   const [selectedMonitor, setSelected] = useState(null);
 
-  const { data: monitors = [], isLoading } = useQuery({
+  const { data: monitors = [], isLoading, error } = useQuery({
     queryKey: ['monitors'],
     queryFn:  () => api.get('/seo/monitors').then((r) => r.data.data),
   });
@@ -2338,6 +2338,14 @@ function MonitorsTab() {
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => <div key={i} className="skeleton h-36 rounded-xl" />)}
+        </div>
+      ) : error ? (
+        <div className="card flex flex-col items-center justify-center py-16 text-center">
+          <AlertCircle className="w-10 h-10 text-red-400/70 mb-4" />
+          <p className="text-sm font-medium text-text-primary">Failed to load monitors</p>
+          <p className="text-xs text-text-secondary mt-1 max-w-xs">
+            The monitor service is temporarily unavailable. Refresh the page or try again in a moment.
+          </p>
         </div>
       ) : monitors.length === 0 ? (
         <div className="card flex flex-col items-center justify-center py-16 text-center">
