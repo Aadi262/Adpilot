@@ -15,6 +15,7 @@ import {
 import api from '../lib/api';
 import { exportToCSV } from '../lib/exportCsv';
 import FeatureHeader from '../components/ui/FeatureHeader';
+import { useToast } from '../components/ui/Toast';
 import { FEATURES } from '../config/features';
 
 // ─── Existing shared helpers (unchanged) ──────────────────────────────────────
@@ -359,6 +360,7 @@ function FailedState({ audit }) {
 // ─── New: Full audit result panel ─────────────────────────────────────────────
 function AuditResultPanel({ auditId, onClose, onComplete, onRerun }) {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [issueTab, setIssueTab] = useState('Technical');
   const [showRerunConfirm, setShowRerunConfirm] = useState(false);
 
@@ -377,6 +379,17 @@ function AuditResultPanel({ auditId, onClose, onComplete, onRerun }) {
     if (!audit?.url) return;
     rerunMutation.mutate({ url: audit.url });
   };
+
+  const retrySummaryMutation = useMutation({
+    mutationFn: () => api.post(`/seo/audit/${auditId}/regenerate-summary?force=1`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['seo', 'audit', auditId] });
+      toast.success('Executive summary regenerated');
+    },
+    onError: (err) => {
+      toast.error(err?.response?.data?.error?.message || 'Failed to regenerate summary');
+    },
+  });
 
   const { data: audit, isLoading } = useQuery({
     queryKey: ['seo', 'audit', auditId],
@@ -510,6 +523,13 @@ function AuditResultPanel({ auditId, onClose, onComplete, onRerun }) {
               {/* ── LLM Executive Summary (when available) ────────────────── */}
               {audit.executiveSummary && (
                 <ExecutiveSummaryPanel summary={audit.executiveSummary} />
+              )}
+
+              {!audit.executiveSummary && (
+                <SummaryUnavailableCard
+                  onRetry={() => retrySummaryMutation.mutate()}
+                  isRetrying={retrySummaryMutation.isPending}
+                />
               )}
 
               {/* ── Overview: gauge + category bars ──────────────────────── */}
@@ -737,6 +757,29 @@ function ExecutiveSummaryPanel({ summary }) {
           </div>
         </div>
       )}
+    </section>
+  );
+}
+
+function SummaryUnavailableCard({ onRetry, isRetrying }) {
+  return (
+    <section className="card flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div>
+        <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
+          <FileText className="w-4 h-4 text-accent-blue" />
+          Executive Summary Unavailable
+        </h3>
+        <p className="text-sm text-text-secondary mt-2">
+          The audit completed, but the AI summary was not generated. This usually means Gemini is unavailable or not configured in this environment.
+        </p>
+      </div>
+      <button
+        onClick={onRetry}
+        disabled={isRetrying}
+        className="btn-secondary whitespace-nowrap"
+      >
+        {isRetrying ? 'Retrying…' : 'Retry Summary'}
+      </button>
     </section>
   );
 }

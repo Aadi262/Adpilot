@@ -218,7 +218,7 @@ model ContentBrief {
 model CampaignAlert {
   id          String    @id @default(uuid())
   teamId      String    @map("team_id")
-  campaignId  String    @map("campaign_id")
+  campaignId  String?   @map("campaign_id")
   alertType   String    @map("alert_type")   // 'roas_drop' | 'ctr_collapse' | 'cpa_spike' | 'budget_bleed'
   threshold   Float
   action      String    // 'pause' | 'notify' | 'reduce_budget'
@@ -228,7 +228,7 @@ model CampaignAlert {
   createdAt   DateTime  @default(now()) @map("created_at")
 
   team     Team     @relation(fields: [teamId], references: [id])
-  campaign Campaign @relation(fields: [campaignId], references: [id])
+  campaign Campaign? @relation(fields: [campaignId], references: [id])
 
   @@index([teamId, campaignId])
   @@map("campaign_alerts")

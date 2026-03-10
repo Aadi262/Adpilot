@@ -17,6 +17,7 @@ router.use(authenticate);
 
 router.post('/audit',            heavyLimiter, ctrl.triggerAudit);
 router.get('/audit/:id',                       ctrl.getAudit);
+router.post('/audit/:id/regenerate-summary',   heavyLimiter, ctrl.regenerateSummary);
 router.delete('/audit/:id',                    ctrl.deleteAudit);
 router.get('/audits',                          ctrl.getAudits);
 router.delete('/audits',                       ctrl.deleteAllAudits);

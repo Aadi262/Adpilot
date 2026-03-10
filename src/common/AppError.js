@@ -16,6 +16,7 @@ class AppError extends Error {
   static conflict(msg)            { return new AppError(msg, 409); }
   static unprocessable(msg)       { return new AppError(msg, 422); }
   static tooManyRequests(msg)     { return new AppError(msg || 'Too many requests', 429); }
+  static serviceUnavailable(msg)  { return new AppError(msg || 'Service unavailable', 503); }
   static internal(msg)            { return new AppError(msg || 'Internal server error', 500); }
 }
 

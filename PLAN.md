@@ -546,6 +546,30 @@ Production Deploy:          ░░░░░░░░░░    0%
 
 ## 6. Next Actions
 
+### Phase R — V2 Intelligence Engine Overhaul (Session 1: Crash Hardening) ⏳ In Progress (2026-03-10)
+
+**Completed this session:**
+- SEO executive summaries now use Gemini instead of Anthropic via `src/services/seo/SeoSummaryService.js`, matching the current AI architecture rule.
+- Added `POST /api/v1/seo/audit/:id/regenerate-summary` in `src/controllers/seoController.js` + `src/routes/seoRoutes.js` so the frontend can retry missing summaries without rerunning the full audit.
+- Beacon UI (`client/src/pages/SeoPage.jsx`) now shows a proper fallback card when a completed audit has no executive summary, plus a Retry Summary button.
+- Market Research (`client/src/pages/ResearchPage.jsx`) now shows visible progress steps, spinner state, inline error state, and auto-scrolls to results after success.
+- Error normalization improved in `src/middleware/errorHandler.js` so provider/env failures return operational JSON messages instead of a generic "Internal server error" where possible.
+- Added `AppError.serviceUnavailable()` in `src/common/AppError.js` for provider/configuration failures.
+- Deployment env visibility improved: `src/controllers/integrationController.js` now reports missing `GEMINI_API_KEY` and `VALUESERP_API_KEY`; `src/config/env.js` validates both variables.
+- Fixed Budget Guardian schema mismatch: `CampaignAlert.campaignId` is now nullable in `prisma/schema.prisma` to match the controller/service logic for global alert rules.
+- Regenerated Prisma Client after the schema change.
+
+**Verification this session:**
+- `npx prisma generate` ✅
+- `npm run build` ✅
+- Backend module load check for touched files ✅
+- `npm test -- --runInBand` returned "No tests found" (repo currently has no Jest test suite)
+
+**Remaining in Phase R:**
+- Replace remaining Anthropic/OpenAI-first AI paths with Gemini-first/provider-safe flows (Forge, briefs, keyword analysis, competitor research).
+- Improve VPS diagnostics further by exposing summary/provider failure reasons in the UI where useful.
+- Continue Session 2 work: real ValueSERP-backed keyword research + SERP-informed content briefs.
+
 ### Phase M — API Verification + Bug Fixes ✅ Complete (2026-03-06)
 
 **Bug fixed:** `src/middleware/validateZod.js` — `result.error.errors` was `undefined` in this Zod version (uses `result.error.issues`). Was causing 500 Internal Server Error on any strict-schema validation failure (ad generation, etc). Fixed to `result.error.issues ?? result.error.errors ?? []`.
@@ -683,7 +707,7 @@ Production Deploy:          ░░░░░░░░░░    0%
 
 ---
 
-*Last updated: 2026-03-03 — Session: Phase J + Bug Fix — real engines, auth team fix, env setup documented*
+*Last updated: 2026-03-10 — Session: Phase R Session 1 — crash hardening, Gemini summary retry flow, market research UX fixes*
 
 ---
 

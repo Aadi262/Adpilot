@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Globe, Search, Plus, Trash2, TrendingUp, Target, Copy, ChevronRight,
@@ -200,10 +200,18 @@ function MarketResearchSection() {
   const [url, setUrl] = useState('');
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [step, setStep] = useState(0);
+  const resultRef = useRef(null);
+  const ANALYZE_STEPS = ['Crawling site…', 'Analyzing keywords…', 'Generating insights…'];
 
   const analyze = async () => {
     if (!url.trim()) return;
     setLoading(true);
+    setErrorMsg('');
+    setResult(null);
+    setStep(0);
+    const interval = setInterval(() => setStep((s) => s + 1), 1100);
     try {
       const res = await api.post('/competitors/analyze', { url: url.trim() });
       const data = res.data.data;
@@ -224,10 +232,16 @@ function MarketResearchSection() {
         keywordGaps:   (data.keywordGaps || []).slice(0, 5),
         hasAiInsights: data.hasAiInsights || false,
       });
+      requestAnimationFrame(() => {
+        resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
       toast.success((!data.isReal) ? 'Analysis complete (demo data — site blocked crawl)' : 'Market analysis complete');
     } catch (err) {
-      toast.error(err.response?.data?.error?.message || 'Analysis failed');
+      const message = err.response?.data?.error?.message || 'Analysis failed';
+      setErrorMsg(message);
+      toast.error(message);
     } finally {
+      clearInterval(interval);
       setLoading(false);
     }
   };
@@ -251,14 +265,38 @@ function MarketResearchSection() {
             disabled={!url.trim() || loading}
             className="btn-primary whitespace-nowrap flex items-center gap-2"
           >
-            <Zap className="w-4 h-4" />
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
             {loading ? 'Analyzing…' : 'Analyze'}
           </button>
         </div>
+
+        {loading && (
+          <div className="pt-2 space-y-2">
+            <p className="text-xs text-text-secondary">{ANALYZE_STEPS[step % ANALYZE_STEPS.length]}</p>
+            <div className="flex gap-1.5">
+              {ANALYZE_STEPS.map((_, i) => (
+                <div key={i} className={`h-1 flex-1 rounded-full transition-colors ${i <= step ? 'bg-accent-blue' : 'bg-border'}`} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {errorMsg && !loading && (
+          <div className="rounded-xl border border-red-500/20 bg-red-500/8 px-4 py-3 flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-red-300">Analysis failed</p>
+                <p className="text-xs text-text-secondary mt-1">{errorMsg}</p>
+              </div>
+            </div>
+            <button onClick={analyze} className="btn-secondary text-sm whitespace-nowrap">Try Again</button>
+          </div>
+        )}
       </div>
 
       {result && (
-        <div className="space-y-4">
+        <div ref={resultRef} className="space-y-4">
           {result.crawlFailed && (
             <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs">
               <AlertCircle className="w-3.5 h-3.5 shrink-0" />

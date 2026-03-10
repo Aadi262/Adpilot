@@ -1,7 +1,7 @@
 'use strict';
 
-const Anthropic = require('@anthropic-ai/sdk');
-const logger    = require('../../config/logger');
+const logger = require('../../config/logger');
+const gemini = require('../ai/GeminiService');
 
 /**
  * SeoSummaryService — generates LLM executive summaries for completed SEO audits.
@@ -9,7 +9,7 @@ const logger    = require('../../config/logger');
  * Gated by:
  *   - featureFlags.seoSummary.enabled  (SEO_SUMMARY_ENABLED env var)
  *   - PLAN_LIMITS[team.plan].summaryEnabled
- *   - ANTHROPIC_API_KEY env var present
+ *   - GEMINI_API_KEY env var present
  *
  * The service is called by AuditOrchestrator after scoring completes.
  * It returns a structured JSON object stored in the `executiveSummary` DB column.
@@ -29,14 +29,8 @@ const logger    = require('../../config/logger');
  *      in the prompt (not the full issues array which can be 100s of items).
  */
 class SeoSummaryService {
-  constructor() {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (apiKey) {
-      this._client = new Anthropic({ apiKey });
-    } else {
-      this._client = null;
-      logger.debug('SeoSummaryService: ANTHROPIC_API_KEY not set — summaries disabled');
-    }
+  get isAvailable() {
+    return gemini.isAvailable;
   }
 
   // ── Public API ──────────────────────────────────────────────────────────────
@@ -55,8 +49,8 @@ class SeoSummaryService {
    * @returns {Promise<SeoSummaryResult|null>}
    */
   async generate(auditData) {
-    if (!this._client) {
-      logger.debug('SeoSummaryService.generate: no API client — returning null');
+    if (!this.isAvailable) {
+      logger.warn('SeoSummaryService.generate: GEMINI_API_KEY not set — summary skipped');
       return null;
     }
 
@@ -71,11 +65,18 @@ class SeoSummaryService {
     let lastErr;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
+        logger.info('SeoSummaryService: requesting Gemini summary', {
+          url: auditData.url,
+          score: auditData.overallScore,
+          promptChars: prompt.length,
+        });
+
         const result = await this._callApi(prompt);
         logger.info('SeoSummaryService: summary generated', {
           url:    auditData.url,
           score:  auditData.overallScore,
           attempt,
+          summaryChars: JSON.stringify(result).length,
         });
         return result;
       } catch (err) {
@@ -165,21 +166,17 @@ Respond ONLY with valid JSON. No markdown, no code blocks, no extra text.`;
   }
 
   /**
-   * Call the Anthropic API and parse the JSON response.
+   * Call the Gemini API and parse the JSON response.
    */
   async _callApi(prompt) {
-    const message = await this._client.messages.create({
-      model:      'claude-sonnet-4-6',
-      max_tokens: 1500,
-      messages: [
-        { role: 'user', content: prompt },
-      ],
+    const rawText = await gemini.generate(prompt, {
+      maxTokens: 1500,
+      temperature: 0.4,
     });
 
-    const rawText = message.content
-      .filter((b) => b.type === 'text')
-      .map((b) => b.text)
-      .join('');
+    if (!rawText) {
+      throw new Error('SeoSummaryService: Gemini returned empty response');
+    }
 
     // Parse JSON — the prompt asks for pure JSON, but handle code blocks defensively
     const cleaned = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
@@ -209,5 +206,4 @@ Respond ONLY with valid JSON. No markdown, no code blocks, no extra text.`;
   }
 }
 
-// Singleton — one Anthropic client per process
 module.exports = new SeoSummaryService();

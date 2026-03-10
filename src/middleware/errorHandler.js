@@ -4,6 +4,24 @@ const logger   = require('../config/logger');
 const Sentry   = require('../config/sentry');
 const AppError = require('../common/AppError');
 
+function normalizeUnexpectedError(err) {
+  const message = String(err?.message || '');
+
+  if (/GEMINI_API_KEY|VALUESERP_API_KEY|ANTHROPIC_API_KEY|OPENAI_API_KEY/i.test(message)) {
+    return AppError.serviceUnavailable('This feature is not configured on the server yet. Check the deployment environment variables.');
+  }
+
+  if (/fetch failed|network error|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|timeout/i.test(message)) {
+    return AppError.serviceUnavailable('The upstream AI or search provider is temporarily unavailable. Try again in a moment.');
+  }
+
+  if (/non-JSON|JSON parse failed|LLM response missing required fields/i.test(message)) {
+    return AppError.serviceUnavailable('The AI provider returned an invalid response. Please try again.');
+  }
+
+  return null;
+}
+
 // eslint-disable-next-line no-unused-vars
 function errorHandler(err, req, res, next) {
   const correlationId = req.correlationId;
@@ -15,6 +33,10 @@ function errorHandler(err, req, res, next) {
     err = AppError.notFound('Record');
   } else if (err.code === 'P2003') {
     err = AppError.badRequest('Foreign key constraint failed.', 'FK_CONSTRAINT');
+  }
+
+  if (!err.isOperational) {
+    err = normalizeUnexpectedError(err) || err;
   }
 
   const statusCode     = err.statusCode || 500;

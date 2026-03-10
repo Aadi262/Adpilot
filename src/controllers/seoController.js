@@ -139,6 +139,57 @@ exports.getAudit = async (req, res, next) => {
 };
 
 /**
+ * POST /api/v1/seo/audit/:id/regenerate-summary
+ * Regenerates the executive summary for a completed audit.
+ */
+exports.regenerateSummary = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { teamId } = req.user;
+
+    const audit = await prisma.seoAudit.findFirst({
+      where: { id, teamId },
+    });
+
+    if (!audit) throw AppError.notFound('Audit');
+    if (!['completed', 'complete'].includes(audit.status)) {
+      throw AppError.badRequest('Summary can only be regenerated for completed audits');
+    }
+
+    const issues = Array.isArray(audit.issues) ? audit.issues : [];
+    const performanceData = audit.performanceData ?? {};
+    const categoryScores = audit.categoryScores ?? {};
+    const existingSummary = _parseSummary(audit.summary);
+
+    const SeoSummaryService = require('../services/seo/SeoSummaryService');
+    if (!SeoSummaryService.isAvailable) {
+      throw AppError.serviceUnavailable('Executive summary is unavailable because GEMINI_API_KEY is not configured on this server.');
+    }
+
+    const summary = await SeoSummaryService.generate({
+      url: audit.url,
+      overallScore: audit.overallScore ?? 0,
+      grade: audit.grade ?? 'F',
+      issues,
+      categoryScores,
+      performanceData,
+      existingSummary: req.query.force ? null : existingSummary,
+    });
+
+    if (!summary) {
+      throw AppError.serviceUnavailable('Executive summary could not be generated right now. Check Gemini configuration and try again.');
+    }
+
+    await prisma.seoAudit.update({
+      where: { id: audit.id },
+      data: { summary: JSON.stringify(summary) },
+    });
+
+    return success(res, { summary });
+  } catch (err) { next(err); }
+};
+
+/**
  * GET /api/v1/seo/audits
  * List all audits for the team (paginated), newest first.
  */

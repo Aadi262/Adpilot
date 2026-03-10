@@ -6,7 +6,7 @@
 
 Stop managing ads manually. Let AI agents research, create, optimize, and report — across Meta and Google — from one dashboard.
 
-[![Node.js](https://img.shields.io/badge/Node.js-23.x-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-20%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![Express](https://img.shields.io/badge/Express-4.18-000000?logo=express&logoColor=white)](https://expressjs.com/)
 [![Prisma](https://img.shields.io/badge/Prisma-6.19-2D3748?logo=prisma&logoColor=white)](https://www.prisma.io/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://postgresql.org/)
@@ -15,7 +15,7 @@ Stop managing ads manually. Let AI agents research, create, optimize, and report
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.x-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![License](https://img.shields.io/badge/License-Proprietary-red)]()
 
-[Live Demo](#) · [Documentation](#architecture) · [API Reference](#api-endpoints) · [Contributing](#contributing)
+[Live Demo](#) · [Documentation](#architecture) · [Code Structure](./CODEBASE_STRUCTURE.md) · [API Reference](#api-endpoints)
 
 </div>
 
@@ -23,50 +23,48 @@ Stop managing ads manually. Let AI agents research, create, optimize, and report
 
 ## What is AdPilot?
 
-AdPilot replaces 3–5 separate marketing tools with a single AI-powered platform. It automates competitor research, ad creative generation, campaign management, SEO auditing, and performance analytics — all from one dark-themed command center built for agencies and growth teams.
+AdPilot is a full-stack marketing operations platform that combines campaign management, SEO tooling, competitor research, analytics, alerts, and AI-assisted workflows in one application.
 
-**The problem:** Marketing teams waste 15–25 hours per week on manual research, creative testing, bid management, and switching between Meta Ads Manager, Google Ads, Semrush, and Ahrefs.
+**The problem:** Growth teams lose time and context switching across ad managers, SEO tools, reporting dashboards, and manual research workflows.
 
-**The solution:** Six AI agents that work 24/7 — researching competitors, generating ad copy, deploying campaigns, optimizing bids, auditing SEO, and delivering unified reports.
+**The solution:** A single command center with route-based tools for campaign operations, SEO audits, keyword tracking, research, scaling analysis, budget monitoring, notifications, and reporting.
 
 ---
 
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                        CLIENT (React 18 + Tailwind)                      │
-│  Login → Dashboard → Campaigns → Ad Studio → SEO → Analytics → Rules    │
-└──────────────────────────┬───────────────────────────────────────────────┘
-                           │ REST API (JWT Auth)
-┌──────────────────────────▼───────────────────────────────────────────────┐
-│                        API LAYER (Express 4)                             │
-│  Routes → Validators (Zod/Joi) → Controllers → Services                 │
-│  Middleware: Helmet, CORS, Rate Limiter, XSS Sanitize, Correlation ID   │
-└──────┬──────────┬──────────┬──────────┬──────────┬───────────────────────┘
-       │          │          │          │          │
-┌──────▼───┐ ┌───▼────┐ ┌───▼────┐ ┌───▼────┐ ┌──▼──────────┐
-│   Auth   │ │Campaign│ │  SEO   │ │ Rules  │ │Integrations │
-│ Service  │ │Service │ │ Engine │ │ Engine │ │  Service    │
-└──────────┘ └────────┘ └───┬────┘ └───┬────┘ └──┬──────────┘
-                            │          │          │
-              ┌─────────────▼──┐  ┌────▼────┐  ┌─▼─────────────────┐
-              │ Audit Pipeline │  │Strategy │  │ Platform Adapters  │
-              │ Crawl→Analyze  │  │ Pattern │  │ Meta │ Google │    │
-              │ →Score→Report  │  │CPA,ROAS │  │ Slack│ (Base) │    │
-              └────────────────┘  │CTR,Freq │  └───────────────────┘
-                                  │Budget   │
-                                  └─────────┘
-┌──────────────────────────────────────────────────────────────────────────┐
-│                     BACKGROUND JOBS (Bull + Redis)                        │
-│  seoAudit │ keywordSync │ ruleEvaluation │ analyticsRefresh │            │
-│  integrationSync │ tokenHealthCheck │ notifications                      │
-└──────────────────────────────────────────────────────────────────────────┘
-       │                          │
-┌──────▼──────────┐    ┌─────────▼─────────┐
-│  PostgreSQL 16  │    │     Redis 7       │
-│  (Prisma ORM)   │    │  Queues + Cache   │
-└─────────────────┘    └───────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                     CLIENT (React 18 + Vite + Tailwind)                     │
+│  Landing → Auth → Dashboard → Campaigns → SEO → Research → Analytics       │
+│  Ad Studio → Budget AI → Scaling → Notifications → Team → Settings         │
+└──────────────────────────────┬───────────────────────────────────────────────┘
+                               │ REST API + JWT
+┌──────────────────────────────▼───────────────────────────────────────────────┐
+│                         API LAYER (Express 4)                               │
+│  Routes → Validators → Controllers → Services → Repositories               │
+│  Middleware: Helmet, CORS, Rate Limit, Sanitize, Correlation ID, Timing    │
+└──────┬─────────────┬─────────────┬──────────────┬─────────────┬─────────────┘
+       │             │             │              │             │
+┌──────▼─────┐ ┌─────▼─────┐ ┌────▼─────┐ ┌──────▼─────┐ ┌─────▼────────┐
+│    Auth    │ │ Campaigns │ │   SEO    │ │ Research & │ │ Monitoring & │
+│   Users    │ │ Ads/Rules │ │ Audits    │ │ AI Features │ │ Notifications │
+└────────────┘ └───────────┘ └────┬──────┘ └────────────┘ └──────────────┘
+                                  │
+                    ┌─────────────▼────────────────┐
+                    │        SEO Audit Pipeline     │
+                    │ Crawl → Technical → Perf →    │
+                    │ Score → Summary → Monitoring  │
+                    └───────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                    BACKGROUND WORK (Bull + Redis)                           │
+│ seoAudit │ seoMonitor │ keywordSync │ ruleEvaluation │ analyticsRefresh     │
+│ integrationSync │ tokenHealthCheck │ notifications                         │
+└──────────────────────────────────────────────────────────────────────────────┘
+               │                                      │
+┌──────────────▼──────────────┐        ┌──────────────▼──────────────┐
+│ PostgreSQL 16 via Prisma 6 │        │ Redis 7 for queues/cache    │
+└─────────────────────────────┘        └─────────────────────────────┘
 ```
 
 ---
@@ -75,22 +73,25 @@ AdPilot replaces 3–5 separate marketing tools with a single AI-powered platfor
 
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
-| **Runtime** | Node.js 23 | Server runtime |
-| **Framework** | Express 4.18 | REST API server |
-| **ORM** | Prisma 6.19 | Type-safe database access |
-| **Database** | PostgreSQL 16 Alpine | Primary data store |
-| **Cache/Queue** | Redis 7 Alpine + Bull | Job queues, caching, sessions |
-| **Frontend** | React 18 + Vite | SPA dashboard |
+| **Runtime** | Node.js 20+ | Runs the API server and queue startup process |
+| **Framework** | Express 4.18 | Hosts the REST API, middleware stack, and static serving |
+| **ORM** | Prisma 6.19 | Maps application models to PostgreSQL |
+| **Database** | PostgreSQL 16 | Primary relational store for all app data |
+| **Cache/Queue** | Redis 7 + Bull | Handles background jobs and queue state |
+| **Frontend** | React 18 + Vite 5 | Builds the dashboard SPA and public pages |
 | **Styling** | Tailwind CSS 3 | Utility-first CSS |
 | **Auth** | JWT + bcrypt | Stateless authentication |
-| **Validation** | Zod + Joi | Request schema validation |
-| **SEO Crawling** | Cheerio | HTML parsing and analysis |
-| **Security** | Helmet + XSS + Rate Limiting | API hardening |
-| **Logging** | Pino + Winston | Structured JSON logging |
+| **Validation** | Zod + Joi | Request schema validation on API boundaries |
+| **SEO Crawling** | Puppeteer + Cheerio + Lighthouse | Crawling, extraction, and performance auditing |
+| **Client Data** | React Query + Zustand | API caching/polling plus lightweight client state |
+| **Charts** | Recharts | Analytics and monitor visualizations |
+| **Security** | Helmet + XSS + express-rate-limit | API hardening |
+| **Logging** | Pino + Winston | Structured application logging |
 | **Email** | Resend | Transactional email |
 | **Monitoring** | Sentry | Error tracking |
 | **Testing** | Jest + Supertest | Unit and integration tests |
 | **Containers** | Docker Compose | Local development |
+| **AI Providers** | Ollama, Gemini, Hugging Face, Anthropic, Groq SDK | Ad generation, summaries, and research fallbacks |
 
 ---
 
@@ -98,109 +99,94 @@ AdPilot replaces 3–5 separate marketing tools with a single AI-powered platfor
 
 ```
 Adpilot/
-├── index.html                    # Landing page (dark theme)
-├── login.html                    # Auth page
-├── docker-compose.yml            # PostgreSQL 16 + Redis 7
-├── package.json                  # Backend dependencies
-├── nodemon.json                  # Dev server config
-├── seed.js                       # Database seed runner
-│
-├── prisma/
-│   ├── schema.prisma             # 15+ models (Team, User, Campaign, Ad, Rule...)
-│   └── migrations/               # 3 migrations (init, phase3, integrations)
-│
-├── client/                       # React 18 + Vite + Tailwind
-│   ├── src/
-│   │   ├── App.jsx               # Router + auth guard
-│   │   ├── main.jsx              # Entry point
-│   │   ├── lib/api.js            # Axios instance + interceptors
-│   │   ├── store/authStore.js    # Zustand auth state
-│   │   ├── components/
-│   │   │   ├── layout/           # AppLayout, Sidebar, TopBar
-│   │   │   ├── ui/               # Badge, StatCard
-│   │   │   └── campaigns/        # CreateCampaignModal
-│   │   └── pages/                # 10 pages (Dashboard, Campaigns, SEO, etc.)
-│   └── dist/                     # Production build output
-│
-└── src/                          # Backend (Express)
-    ├── server.js                 # HTTP server bootstrap
-    ├── app.js                    # Express app + route mounting
-    │
-    ├── config/                   # Centralized configuration
-    │   ├── prisma.js             #   Prisma client singleton
-    │   ├── redis.js              #   ioredis connection
-    │   ├── seo.js                #   Audit weights & thresholds
-    │   ├── logger.js             #   Pino + Winston
-    │   ├── sentry.js             #   Error tracking
-    │   ├── limits.js             #   Plan-based feature limits
-    │   └── featureFlags.js       #   Feature flag system
-    │
-    ├── middleware/                # Express middleware stack
-    │   ├── auth.js               #   JWT verification
-    │   ├── errorHandler.js       #   Global error handler + Sentry
-    │   ├── rateLimiter.js        #   Rate limiting
-    │   ├── sanitize.js           #   XSS input sanitization
-    │   └── correlationId.js      #   Request tracing (X-Request-ID)
-    │
-    ├── routes/                   # 8 route modules
-    ├── controllers/              # 7 controllers
-    │
-    ├── services/
-    │   ├── authService.js        # Register, login, JWT tokens
-    │   ├── campaignService.js    # Campaign CRUD + platform sync
-    │   ├── adService.js          # Ad creative management
-    │   │
-    │   ├── seo/                  # ★ SEO Intelligence Engine
-    │   │   ├── SeoAuditService.js
-    │   │   ├── KeywordTrackingService.js
-    │   │   ├── CompetitorGapService.js
-    │   │   ├── ContentBriefService.js
-    │   │   └── audit/            # ★ 4-Stage Audit Pipeline
-    │   │       ├── AuditOrchestrator.js      # Orchestrator
-    │   │       ├── adapters/                 # Crawler adapters
-    │   │       │   ├── BaseCrawlerAdapter.js
-    │   │       │   └── PuppeteerAdapter.js
-    │   │       ├── engines/                  # Processing engines
-    │   │       │   ├── CrawlEngine.js
-    │   │       │   ├── TechnicalAnalyzer.js
-    │   │       │   ├── PerformanceEngine.js
-    │   │       │   └── ScoringEngine.js
-    │   │       └── rules/                    # 16 audit rules
-    │   │           ├── BaseRule.js
-    │   │           ├── registry.js
-    │   │           ├── technical/ (9 rules)
-    │   │           ├── content/  (4 rules)
-    │   │           └── structure/ (3 rules)
-    │   │
-    │   ├── analytics/            # Analytics pipeline
-    │   │   ├── AnalyticsAggregator.js
-    │   │   ├── AnomalyDetector.js
-    │   │   └── MetricsCalculator.js
-    │   │
-    │   ├── rules/                # ★ Automation Rule Engine
-    │   │   ├── RuleEngine.js
-    │   │   └── strategies/       # 5 strategies (ROAS, CPA, CTR, Freq, Budget)
-    │   │
-    │   ├── integrations/         # ★ Platform Adapters
-    │   │   ├── IntegrationService.js
-    │   │   ├── TokenEncryptionService.js
-    │   │   └── adapters/         # Meta, Google, Slack
-    │   │
-    │   ├── notifications/        # NotificationService
-    │   ├── email/                # EmailService (Resend)
-    │   └── team/                 # TeamService + InviteService
-    │
-    ├── repositories/             # Data access layer (BaseRepository pattern)
-    ├── queues/                   # 7 Bull job processors
-    ├── validators/               # Zod/Joi request schemas
-    └── common/                   # AppError, response helpers, pagination
+├── .claude/                      # Local agent memory and workspace notes
+├── client/                       # React 18 + Vite frontend
+├── prisma/                       # Prisma schema and migrations
+├── src/                          # Express backend source
+├── docker-compose.yml            # Local PostgreSQL + Redis
+├── Dockerfile                    # Production container build
+├── index.html                    # Static landing page served in dev
+├── login.html                    # Static login page served in dev
+├── package.json                  # Backend scripts and dependencies
+├── nodemon.json                  # Backend hot-reload config
+├── PLAN.md                       # Master implementation ledger
+├── LAUNCH.md                     # Launch notes and copy
+├── FEATURE_STATUS.md             # Feature progress notes
+├── PORTS.md                      # Local port reference
+├── railway.json                  # Railway deploy config
+├── seed.js                       # Root seed entry
+└── CODEBASE_STRUCTURE.md         # Full repo map and stack guide
 ```
+
+### Frontend
+
+```
+client/src/
+├── App.jsx                       # Router, lazy routes, guards, command palette
+├── main.jsx                      # React app bootstrap
+├── index.css                     # Global styles and animation utilities
+├── components/
+│   ├── campaigns/                # Campaign-specific modal UI
+│   ├── layout/                   # Sidebar, TopBar, AppLayout
+│   └── ui/                       # Shared reusable UI primitives
+├── config/                       # Feature identity config
+├── lib/                          # API client and CSV export helpers
+├── pages/                        # Route-level screens
+└── store/                        # Zustand state
+```
+
+### Backend
+
+```
+src/
+├── app.js                        # Express composition root
+├── server.js                     # Startup and graceful shutdown
+├── config/                       # Env, Prisma, Redis, limits, logger, Sentry
+├── middleware/                   # Auth, sanitize, validation, rate limit, timing
+├── routes/                       # `/api/v1` route modules
+├── controllers/                  # HTTP request handlers
+├── services/                     # Business logic by domain
+├── repositories/                 # Data access abstraction layer
+├── queues/                       # Bull registry and processors
+├── orchestrators/                # Cross-service workflows
+├── validators/                   # Zod/Joi schemas and helpers
+├── common/                       # Error and response helpers
+├── cache/                        # Cache utilities
+├── scripts/                      # Operational scripts
+├── utils/                        # Shared utilities
+├── dtos/                         # Reserved DTO area
+├── infrastructure/               # Reserved infrastructure area
+└── integrations/                 # Reserved top-level integrations area
+```
+
+### Deeper Structure
+
+```
+src/services/
+├── ai/                           # AI provider integrations and analysis helpers
+├── analytics/                    # KPI aggregation and anomaly detection
+├── budgetProtection/             # Budget Guardian logic
+├── email/                        # Transactional email delivery
+├── integrations/                 # External platform integration services/adapters
+├── keywords/                     # Keyword discovery and SERP helpers
+├── notifications/                # In-app notification domain logic
+├── pulse/                        # Pulse monitoring service
+├── rules/                        # Automation rule engine and strategies
+├── scaling/                      # Scaling readiness analysis
+├── seo/                          # SEO audit, tracking, monitoring, summaries
+├── team/                         # Team and invite workflows
+├── adService.js                  # Ad business logic
+├── authService.js                # Auth business logic
+└── campaignService.js            # Campaign business logic
+```
+
+For the full current root map, see [CODEBASE_STRUCTURE.md](./CODEBASE_STRUCTURE.md).
 
 ---
 
 ## SEO Audit Engine
 
-The SEO engine is a 4-stage pipeline built entirely with free, self-hosted tools — zero API costs.
+The SEO engine is a multi-stage pipeline that crawls pages, evaluates technical/content/structure issues, scores the site, and can optionally generate an executive summary.
 
 ### Pipeline
 
@@ -208,39 +194,46 @@ The SEO engine is a 4-stage pipeline built entirely with free, self-hosted tools
 User triggers audit
         │
         ▼
-┌─────────────────┐     ┌──────────────────┐     ┌────────────────┐     ┌──────────────┐
-│   CrawlEngine   │ ──▶ │TechnicalAnalyzer │ ──▶ │ ScoringEngine  │ ──▶ │    Report     │
-│                 │     │                  │     │                │     │              │
-│ Breadth-first   │     │ 16 rules         │     │ Weighted 0-100 │     │ JSON + AI    │
-│ Up to 500 pages │     │ 3 categories     │     │ Per-category   │     │ summary      │
-│ Status codes    │     │ Isolated exec    │     │ Overall score  │     │              │
-└─────────────────┘     └──────────────────┘     └────────────────┘     └──────────────┘
-        │
-        ▼
-┌─────────────────┐
-│PerformanceEngine│
-│ Lighthouse CI   │
-│ Core Web Vitals │
-└─────────────────┘
+┌─────────────────┐     ┌──────────────────┐     ┌──────────────────┐     ┌──────────────┐
+│   CrawlEngine   │ ──▶ │TechnicalAnalyzer │ ──▶ │ PerformanceEngine│ ──▶ │ ScoringEngine│
+│ BFS crawl       │     │ Rule execution   │     │ Lighthouse + CWV │     │ Weighted     │
+│ robots filtering│     │ issue creation   │     │ page metrics     │     │ category score│
+└─────────────────┘     └──────────────────┘     └──────────────────┘     └──────┬───────┘
+                                                                                  │
+                                                                                  ▼
+                                                                          ┌──────────────┐
+                                                                          │ Summary / UI │
+                                                                          │ API response │
+                                                                          │ + monitoring │
+                                                                          └──────────────┘
 ```
 
-### 16 Audit Rules
+### Audit Rule Set
+
+The audit engine currently includes technical, content, and structure rules across files in `src/services/seo/audit/rules`.
 
 | Category | Rule | Severity | What It Checks |
 |----------|------|----------|----------------|
 | **Technical** | TitleRule | Critical | Missing/duplicate/too-long title tags |
 | | MetaDescriptionRule | High | Missing or poorly sized meta descriptions |
 | | HeadingRule | Medium | H1 count, heading hierarchy |
+| | HeadingHierarchyRule | Medium | Heading level skips across the page |
 | | HttpsRule | Critical | SSL certificate, HTTP→HTTPS redirects |
 | | CanonicalRule | High | Missing or self-referencing canonicals |
 | | RobotsTxtRule | Medium | robots.txt existence and validity |
 | | SitemapRule | Medium | XML sitemap existence and format |
 | | BrokenLinksRule | Critical | 404s, 5xx, dead internal links |
 | | RedirectChainRule | High | Chains > 2 hops, redirect loops |
+| | SecurityHeadersRule | Medium | Missing browser security headers |
+| | ViewportRule | High | Missing mobile viewport meta tag |
+| | OpenGraphRule | Low | Missing social sharing metadata |
+| | SchemaMarkupRule | Low | Missing structured data markup |
 | **Content** | WordCountRule | Medium | Thin content (< 300 words) |
 | | ImageAltRule | Medium | Missing alt text on images |
 | | DuplicateTitleRule | High | Identical titles across pages |
 | | DuplicateMetaRule | High | Identical meta descriptions |
+| | ImageDimensionsRule | Low | Missing explicit image dimensions |
+| | LazyLoadingRule | Low | Missing lazy loading on images |
 | **Structure** | OrphanPageRule | High | Pages with no internal links to them |
 | | PageDepthRule | Medium | Pages > 3 clicks from homepage |
 | | InternalLinkingRule | Medium | Poor internal link distribution |
@@ -298,24 +291,29 @@ Uses the **Strategy Pattern** to evaluate campaigns and fire automated actions.
 
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
-| `POST` | `/api/auth/register` | Create account + team | No |
-| `POST` | `/api/auth/login` | Get JWT token | No |
-| `GET` | `/api/campaigns` | List campaigns (paginated) | Yes |
-| `POST` | `/api/campaigns` | Create campaign | Yes |
-| `PATCH` | `/api/campaigns/:id` | Update campaign | Yes |
-| `DELETE` | `/api/campaigns/:id` | Soft-delete campaign | Yes |
-| `GET` | `/api/campaigns/:id/ads` | List ads for campaign | Yes |
-| `POST` | `/api/campaigns/:id/ads` | Create ad creative | Yes |
-| `POST` | `/api/seo/audit` | Trigger site audit | Yes |
-| `GET` | `/api/seo/audit/:id` | Get audit results | Yes |
-| `GET` | `/api/seo/keywords` | Tracked keywords | Yes |
-| `GET` | `/api/analytics/overview` | Dashboard metrics | Yes |
-| `GET` | `/api/rules` | List automation rules | Yes |
-| `POST` | `/api/rules` | Create automation rule | Yes |
-| `POST` | `/api/integrations/connect` | OAuth connect | Yes |
-| `DELETE` | `/api/integrations/:id` | Disconnect platform | Yes |
-| `GET` | `/api/teams/current` | Current team | Yes |
-| `POST` | `/api/teams/invite` | Invite member | Yes |
+| `POST` | `/api/v1/auth/register` | Create account and team | No |
+| `POST` | `/api/v1/auth/login` | Authenticate and receive JWT tokens | No |
+| `POST` | `/api/v1/auth/demo-login` | Enter the shared demo workspace | No |
+| `GET` | `/api/v1/campaigns` | List campaigns | Yes |
+| `POST` | `/api/v1/campaigns` | Create a campaign | Yes |
+| `PATCH` | `/api/v1/campaigns/:id` | Update a campaign | Yes |
+| `GET` | `/api/v1/campaigns/:id/ads` | List campaign ads | Yes |
+| `POST` | `/api/v1/campaigns/:id/ads` | Generate or create ads for a campaign | Yes |
+| `GET` | `/api/v1/analytics/overview` | Return analytics KPI summary | Yes |
+| `GET` | `/api/v1/dashboard` | Return dashboard command-center data | Yes |
+| `POST` | `/api/v1/seo/audit` | Start an SEO audit | Yes |
+| `GET` | `/api/v1/seo/audit/:id` | Fetch audit results | Yes |
+| `GET` | `/api/v1/seo/keywords` | List tracked keywords | Yes |
+| `POST` | `/api/v1/seo/monitors` | Create a scheduled SEO monitor | Yes |
+| `GET` | `/api/v1/rules` | List automation rules | Yes |
+| `POST` | `/api/v1/integrations/*` | Manage third-party integrations | Yes |
+| `GET` | `/api/v1/notifications` | List notifications | Yes |
+| `GET` | `/api/v1/budget-ai/scan` | Run budget protection scan | Yes |
+| `GET` | `/api/v1/research/hijack-analysis` | Run competitor intel analysis | Yes |
+| `GET` | `/api/v1/scaling/all-campaigns` | Return scaling readiness data | Yes |
+| `GET` | `/api/v1/pulse` | Return pulse monitoring data | Yes |
+| `GET` | `/api/v1/team` | Return current team data | Yes |
+| `GET` | `/api/v1/users/me` | Return current user/profile data | Yes |
 
 ---
 
@@ -324,6 +322,7 @@ Uses the **Strategy Pattern** to evaluate campaigns and fire automated actions.
 | Queue | Schedule | Purpose |
 |-------|----------|---------|
 | `seoAudit` | On-demand | Full site crawl + analysis + scoring |
+| `seoMonitor` | Every 4 hours sweep + on-demand | Scheduled SEO monitoring and regression detection |
 | `keywordSync` | Daily | Refresh keyword rankings |
 | `ruleEvaluation` | Every 15 min | Campaign rule checks + actions |
 | `analyticsRefresh` | Hourly | Pull platform metrics |
@@ -361,18 +360,20 @@ Uses the **Strategy Pattern** to evaluate campaigns and fire automated actions.
 git clone https://github.com/Aadi262/Adpilot.git
 cd Adpilot
 
-# Install dependencies
+# Install backend dependencies
 npm install
+
+# Install frontend dependencies
 cd client && npm install && cd ..
 
 # Start databases
 docker compose up -d
 
 # Setup environment
-cp .env.example .env   # edit with your values
+cp .env.example .env
 
-# Run migrations + seed
-npx prisma migrate dev
+# Apply schema + seed demo data
+npx prisma db push
 npx prisma generate
 npm run seed
 
@@ -388,9 +389,12 @@ cd client && npm run dev
 ```env
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/adpilot"
 REDIS_URL="redis://localhost:6379"
-JWT_SECRET="your-secret-key"
-JWT_EXPIRES_IN="7d"
+JWT_SECRET="your-32-char-secret"
+JWT_REFRESH_SECRET="your-32-char-refresh-secret"
+ENCRYPTION_KEY="64-char-hex-key"
 RESEND_API_KEY="re_xxxx"
+ANTHROPIC_API_KEY=""
+OPENAI_API_KEY=""
 ALLOWED_ORIGINS="http://localhost:5173"
 ```
 
@@ -400,11 +404,13 @@ ALLOWED_ORIGINS="http://localhost:5173"
 
 ```bash
 npm run dev            # Backend with hot reload
+npm run dev:all        # Backend + frontend together
 npm run start          # Production start
+npm run build          # Prisma generate + frontend build
 npm run seed           # Seed database
 npm run test           # Run tests
 npx prisma studio      # Database GUI
-npx prisma migrate dev # Run migrations
+npx prisma db push     # Apply schema changes
 ```
 
 ---
