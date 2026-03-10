@@ -70,7 +70,10 @@ exports.generate = async (req, res, next) => {
 
     const ov   = overview.status    === 'fulfilled' ? overview.value    : {};
     const cpgs = campaigns.status   === 'fulfilled' ? campaigns.value   : [];
-    const kws  = (keywords.status === 'fulfilled' ? keywords.value : []).filter((row) => isKeywordUsable(row.keyword));
+    const kws  = (keywords.status === 'fulfilled' ? keywords.value : []).filter((row) => {
+      if (!isKeywordUsable(row.keyword)) return false;
+      return row.currentRank != null || (Number(row.searchVolume) || 0) >= 100;
+    });
     const comp = competitors.status === 'fulfilled' ? competitors.value : [];
     const seo  = seoAudits.status   === 'fulfilled' ? seoAudits.value   : [];
     const alertCount = alerts.status === 'fulfilled' ? alerts.value : 0;
