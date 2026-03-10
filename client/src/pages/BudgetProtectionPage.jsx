@@ -4,7 +4,7 @@ import {
   ShieldAlert, AlertTriangle, CheckCircle2, Plus, Trash2, ToggleLeft, ToggleRight,
   Zap, Bell, TrendingDown, RefreshCw, X, Clock, Download,
 } from 'lucide-react';
-import { exportToCSV } from '../lib/exportCsv';
+import { downloadMarkdownReport } from '../lib/exportReport';
 import api from '../lib/api';
 import { useToast } from '../components/ui/Toast';
 import Badge from '../components/ui/Badge';
@@ -355,21 +355,35 @@ export default function BudgetProtectionPage() {
           <div className="flex items-center gap-2">
             {rules.length > 0 && (
               <button
-                onClick={() => exportToCSV(
-                  rules.map(r => ({
-                    campaign: r.campaign?.name ?? 'Unknown',
-                    type: ALERT_TYPE_LABELS[r.alertType] ?? r.alertType,
-                    threshold: r.threshold,
-                    action: ACTION_LABELS[r.action] ?? r.action,
-                    active: r.isActive ? 'Yes' : 'No',
-                    triggered: r.triggeredAt ? new Date(r.triggeredAt).toLocaleDateString() : 'Never',
-                  })),
-                  ['campaign', 'type', 'threshold', 'action', 'active', 'triggered'],
-                  'budget-alert-rules'
-                )}
+                onClick={() => downloadMarkdownReport('Budget Protection Report', [
+                  {
+                    title: 'Scan Summary',
+                    items: [
+                      `Rules configured: ${rules.length}`,
+                      `Alerts in latest scan: ${(scan?.alerts ?? []).length}`,
+                      `Daily spend: ${scan?.summary?.dailySpend ?? 'Unavailable'}`,
+                      `Weekly spend: ${scan?.summary?.weeklySpend ?? 'Unavailable'}`,
+                      `Monthly spend: ${scan?.summary?.monthlySpend ?? 'Unavailable'}`,
+                    ],
+                  },
+                  {
+                    title: 'Alert Rules',
+                    table: {
+                      headers: ['Campaign', 'Type', 'Threshold', 'Action', 'Active', 'Triggered'],
+                      rows: rules.map((r) => [
+                        r.campaign?.name ?? 'Unknown',
+                        ALERT_TYPE_LABELS[r.alertType] ?? r.alertType,
+                        r.threshold,
+                        ACTION_LABELS[r.action] ?? r.action,
+                        r.isActive ? 'Yes' : 'No',
+                        r.triggeredAt ? new Date(r.triggeredAt).toLocaleString() : 'Never',
+                      ]),
+                    },
+                  },
+                ], 'budget-protection-report')}
                 className="btn-secondary text-xs flex items-center gap-1.5 py-1.5 px-2"
               >
-                <Download className="w-3.5 h-3.5" />CSV
+                <Download className="w-3.5 h-3.5" />Report
               </button>
             )}
             <button

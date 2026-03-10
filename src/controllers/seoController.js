@@ -12,6 +12,7 @@ const { success, created, paginated } = require('../common/response');
 const { parsePagination } = require('../common/pagination');
 const AppError            = require('../common/AppError');
 const { ACTIVE_STATUSES } = require('../services/seo/audit/AuditOrchestrator');
+const { getKeywordQualityIssue } = require('../utils/keywordQuality');
 
 // ── SEO Audits ────────────────────────────────────────────────────────────────
 
@@ -470,12 +471,8 @@ exports.createKeyword = async (req, res, next) => {
   try {
     const { keyword, trackedUrl, searchVolume, difficulty, source } = req.body;
 
-    if (!keyword || typeof keyword !== 'string' || !keyword.trim()) {
-      throw AppError.badRequest('keyword is required');
-    }
-    if (keyword.trim().length > 200) {
-      throw AppError.badRequest('keyword must be 200 characters or fewer');
-    }
+    const qualityIssue = getKeywordQualityIssue(keyword);
+    if (qualityIssue) throw AppError.badRequest(qualityIssue);
     if (searchVolume !== undefined && (typeof searchVolume !== 'number' || searchVolume < 0)) {
       throw AppError.badRequest('searchVolume must be a non-negative number');
     }

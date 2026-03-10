@@ -4,7 +4,7 @@ import { Plus, Play, Pause, Trash2, Filter, X, AlertCircle, Download } from 'luc
 import api from '../lib/api';
 import Badge from '../components/ui/Badge';
 import CreateCampaignModal from '../components/campaigns/CreateCampaignModal';
-import { exportToCSV } from '../lib/exportCsv';
+import { downloadMarkdownReport } from '../lib/exportReport';
 
 function SkeletonRow() {
   return (
@@ -137,16 +137,30 @@ export default function CampaignsPage() {
         <div className="flex items-center gap-2">
           {campaigns?.length > 0 && (
             <button
-              onClick={() => exportToCSV(
-                campaigns.map(c => ({
-                  name: c.name, platform: c.platform, status: c.status,
-                  budget: Number(c.budget), budgetType: c.budgetType,
-                  created: new Date(c.createdAt).toLocaleDateString(),
-                })),
-                ['name', 'platform', 'status', 'budget', 'budgetType', 'created'],
-                'campaigns',
-                { budgetType: 'Budget Type', created: 'Created Date' }
-              )}
+              onClick={() => downloadMarkdownReport('Campaigns Report', [
+                {
+                  title: 'Summary',
+                  items: [
+                    `Campaign count: ${campaigns.length}`,
+                    `Platform filter: ${filters.platform || 'All platforms'}`,
+                    `Status filter: ${filters.status || 'All statuses'}`,
+                  ],
+                },
+                {
+                  title: 'Campaign Inventory',
+                  table: {
+                    headers: ['Name', 'Platform', 'Status', 'Budget', 'Budget Type', 'Created'],
+                    rows: campaigns.map((c) => [
+                      c.name,
+                      c.platform,
+                      c.status,
+                      Number(c.budget),
+                      c.budgetType,
+                      new Date(c.createdAt).toLocaleDateString(),
+                    ]),
+                  },
+                },
+              ], 'campaigns-report')}
               className="hidden sm:flex items-center gap-2 btn-secondary"
             >
               <Download className="w-4 h-4" />

@@ -10,6 +10,7 @@ import {
   BarChart, Bar,
 } from 'recharts';
 import api from '../lib/api';
+import { downloadMarkdownReport } from '../lib/exportReport';
 import StatCard from '../components/ui/StatCard';
 import Badge from '../components/ui/Badge';
 
@@ -58,20 +59,6 @@ const CustomTooltip = ({ active, payload, label }) => {
     </div>
   );
 };
-
-function exportCSV(campaigns) {
-  const header = ['Campaign', 'Platform', 'Status', 'Spend', 'ROAS', 'Clicks', 'Impressions'];
-  const rows = (campaigns ?? []).map((c) => [
-    `"${c.name}"`, c.platform, c.status,
-    c.spend, c.roas, c.clicks, c.impressions,
-  ]);
-  const csv = [header, ...rows].map((r) => r.join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url; a.download = `analytics-${new Date().toISOString().slice(0,10)}.csv`;
-  a.click(); URL.revokeObjectURL(url);
-}
 
 export default function AnalyticsPage() {
   const [range, setRange] = useState('30d');
@@ -124,11 +111,38 @@ export default function AnalyticsPage() {
             ))}
           </div>
           <button
-            onClick={() => exportCSV(campaigns)}
+            onClick={() => downloadMarkdownReport('Analytics Report', [
+              {
+                title: 'Overview',
+                items: [
+                  `Range: ${range}`,
+                  `Total campaigns: ${overview?.totalCampaigns ?? 0}`,
+                  `Active campaigns: ${overview?.activeCampaigns ?? 0}`,
+                  `Total spend: $${overview?.totalAdSpend ?? 0}`,
+                  `Average ROAS: ${overview?.avgROAS ?? 0}x`,
+                  `Total clicks: ${overview?.totalClicks ?? 0}`,
+                ],
+              },
+              {
+                title: 'Campaign Performance',
+                table: {
+                  headers: ['Campaign', 'Platform', 'Status', 'Spend', 'ROAS', 'Clicks', 'Impressions'],
+                  rows: (campaigns ?? []).map((c) => [
+                    c.name,
+                    c.platform,
+                    c.status,
+                    c.spend,
+                    c.roas,
+                    c.clicks,
+                    c.impressions,
+                  ]),
+                },
+              },
+            ], `analytics-${range}-report`)}
             disabled={!campaigns?.length}
             className="btn-secondary flex items-center gap-1.5 text-sm"
           >
-            <Download className="w-4 h-4" />Export CSV
+            <Download className="w-4 h-4" />Export Report
           </button>
         </div>
       </div>

@@ -5,7 +5,7 @@ import {
   CheckCheck, Trash2, X, Download,
 } from 'lucide-react';
 import api from '../lib/api';
-import { exportToCSV } from '../lib/exportCsv';
+import { downloadMarkdownReport } from '../lib/exportReport';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function timeAgo(dateStr) {
@@ -86,16 +86,28 @@ export default function NotificationsPage() {
         <div className="flex items-center gap-2">
           {notifications.length > 0 && (
             <button
-              onClick={() => exportToCSV(
-                notifications.map(n => ({
-                  message: n.message,
-                  type: n.type,
-                  read: n.status === 'read' ? 'Yes' : 'No',
-                  date: new Date(n.createdAt).toLocaleDateString(),
-                })),
-                ['message', 'type', 'read', 'date'],
-                'notifications'
-              )}
+              onClick={() => downloadMarkdownReport('Notifications Report', [
+                {
+                  title: 'Summary',
+                  items: [
+                    `Unread notifications: ${unreadCount}`,
+                    `Filter: ${activeFilter}`,
+                    `Total notifications in export: ${notifications.length}`,
+                  ],
+                },
+                {
+                  title: 'Notifications',
+                  table: {
+                    headers: ['Message', 'Type', 'Read', 'Date'],
+                    rows: notifications.map((n) => [
+                      n.message,
+                      n.type,
+                      n.status === 'read' ? 'Yes' : 'No',
+                      new Date(n.createdAt).toLocaleString(),
+                    ]),
+                  },
+                },
+              ], 'notifications-report')}
               className="flex items-center gap-1.5 btn-secondary text-sm"
             >
               <Download className="w-4 h-4" />

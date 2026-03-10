@@ -4,7 +4,7 @@ import {
   Globe, Search, Plus, Trash2, TrendingUp, Target, Copy, ChevronRight,
   AlertCircle, Zap, Loader2, Sparkles, DollarSign, Key, FlaskConical, Download, ChevronDown,
 } from 'lucide-react';
-import { exportToCSV } from '../lib/exportCsv';
+import { downloadMarkdownReport } from '../lib/exportReport';
 import api from '../lib/api';
 import { useToast } from '../components/ui/Toast';
 import Badge from '../components/ui/Badge';
@@ -110,14 +110,26 @@ function CompetitorSection() {
           <div className="px-5 py-3 border-b border-border flex items-center justify-between">
             <h3 className="text-sm font-semibold text-text-primary">Tracked Competitors</h3>
             <button
-              onClick={() => exportToCSV(
-                (competitors ?? []).map(c => ({
-                  domain: c.domain, name: c.name ?? c.domain,
-                  added: new Date(c.createdAt).toLocaleDateString(),
-                })),
-                ['domain', 'name', 'added'],
-                'competitors'
-              )}
+              onClick={() => downloadMarkdownReport('Competitor Tracking Report', [
+                {
+                  title: 'Summary',
+                  items: [
+                    `Tracked competitors: ${(competitors ?? []).length}`,
+                    `Gap rows available: ${gapRows.length}`,
+                  ],
+                },
+                {
+                  title: 'Tracked Competitors',
+                  table: {
+                    headers: ['Domain', 'Name', 'Added'],
+                    rows: (competitors ?? []).map((c) => [
+                      c.domain,
+                      c.name ?? c.domain,
+                      new Date(c.createdAt).toLocaleDateString(),
+                    ]),
+                  },
+                },
+              ], 'competitors-report')}
               className="flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary transition-colors"
             >
               <Download className="w-3.5 h-3.5" />Export

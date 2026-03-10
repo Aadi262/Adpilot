@@ -13,7 +13,7 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
 import api from '../lib/api';
-import { exportToCSV } from '../lib/exportCsv';
+import { downloadMarkdownReport } from '../lib/exportReport';
 import FeatureHeader from '../components/ui/FeatureHeader';
 import { useToast } from '../components/ui/Toast';
 import { FEATURES } from '../config/features';
@@ -1346,17 +1346,28 @@ function AuditsTab({ initialUrl = '', autoRun = false }) {
             {audits?.length > 0 && (
               <>
                 <button
-                  onClick={() => exportToCSV(
-                    (audits || []).map(a => ({
-                      url: a.url,
-                      score: a.overallScore ?? a.summary?.score ?? '',
-                      grade: a.grade ?? a.summary?.grade ?? '',
-                      status: a.status,
-                      date: new Date(a.createdAt).toLocaleDateString(),
-                    })),
-                    ['url', 'score', 'grade', 'status', 'date'],
-                    'seo-audits'
-                  )}
+                  onClick={() => downloadMarkdownReport('SEO Audit Report', [
+                    {
+                      title: 'Summary',
+                      items: [
+                        `Audit count: ${(audits || []).length}`,
+                        `Completed audits: ${(audits || []).filter((a) => ['completed', 'complete'].includes(a.status)).length}`,
+                      ],
+                    },
+                    {
+                      title: 'Audit Inventory',
+                      table: {
+                        headers: ['URL', 'Score', 'Grade', 'Status', 'Date'],
+                        rows: (audits || []).map((a) => [
+                          a.url,
+                          a.overallScore ?? a.summary?.score ?? '',
+                          a.grade ?? a.summary?.grade ?? '',
+                          a.status,
+                          new Date(a.createdAt).toLocaleDateString(),
+                        ]),
+                      },
+                    },
+                  ], 'seo-audit-report')}
                   className="flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary transition-colors"
                 >
                   <Download className="w-3.5 h-3.5" />
@@ -1717,18 +1728,29 @@ function KeywordsTab() {
         <div className="flex items-center gap-2">
           {(keywords?.length > 0) && (
             <button
-              onClick={() => exportToCSV(
-                (keywords ?? []).map(k => ({
-                  keyword: k.keyword,
-                  rank: k.currentRank ?? '',
-                  prev: k.previousRank ?? '',
-                  url: k.trackedUrl ?? '',
-                  active: k.isActive ? 'Yes' : 'No',
-                })),
-                ['keyword', 'rank', 'prev', 'url', 'active'],
-                'keywords',
-                { rank: 'Current Rank', prev: 'Previous Rank', url: 'Tracked URL' }
-              )}
+              onClick={() => downloadMarkdownReport('Keyword Tracking Report', [
+                {
+                  title: 'Summary',
+                  items: [
+                    `Tracked keywords: ${(keywords ?? []).length}`,
+                    `Keywords with current rank: ${(keywords ?? []).filter((k) => k.currentRank != null).length}`,
+                    `Active keywords: ${(keywords ?? []).filter((k) => k.isActive).length}`,
+                  ],
+                },
+                {
+                  title: 'Tracked Keywords',
+                  table: {
+                    headers: ['Keyword', 'Current Rank', 'Previous Rank', 'Tracked URL', 'Active'],
+                    rows: (keywords ?? []).map((k) => [
+                      k.keyword,
+                      k.currentRank ?? '',
+                      k.previousRank ?? '',
+                      k.trackedUrl ?? '',
+                      k.isActive ? 'Yes' : 'No',
+                    ]),
+                  },
+                },
+              ], 'keyword-tracking-report')}
               className="btn-secondary flex items-center gap-2 text-sm"
             >
               <Download className="w-4 h-4" />Export

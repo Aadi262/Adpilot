@@ -2,6 +2,7 @@
 
 const prisma    = require('../../config/prisma');
 const AppError  = require('../../common/AppError');
+const { normalizeKeywordText, getKeywordQualityIssue } = require('../../utils/keywordQuality');
 
 /**
  * KeywordService — create and delete tracked keywords.
@@ -24,10 +25,13 @@ class KeywordService {
    * @returns {Promise<Keyword>}
    */
   async createKeyword(teamId, userId, { keyword, trackedUrl, searchVolume, difficulty, source }) {
+    const qualityIssue = getKeywordQualityIssue(keyword);
+    if (qualityIssue) throw AppError.badRequest(qualityIssue);
+
     return prisma.keyword.create({
       data: {
         teamId,
-        keyword:      keyword.trim().toLowerCase(),
+        keyword:      normalizeKeywordText(keyword),
         searchVolume: searchVolume ?? 0,
         difficulty:   difficulty   ?? 0,
         trackedUrl:   trackedUrl   ?? null,

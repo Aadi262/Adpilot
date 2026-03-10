@@ -7,6 +7,7 @@ const aggregator  = require('../services/analytics/AnalyticsAggregator');
 const anthropic   = require('../services/ai/AnthropicService');
 const gemini      = require('../services/ai/GeminiService');
 const { withTimeout } = require('../utils/timeout');
+const { isKeywordUsable } = require('../utils/keywordQuality');
 
 function rangeToDate(range) {
   const days = range === '7d' ? 7 : range === '90d' ? 90 : 30;
@@ -69,7 +70,7 @@ exports.generate = async (req, res, next) => {
 
     const ov   = overview.status    === 'fulfilled' ? overview.value    : {};
     const cpgs = campaigns.status   === 'fulfilled' ? campaigns.value   : [];
-    const kws  = keywords.status    === 'fulfilled' ? keywords.value    : [];
+    const kws  = (keywords.status === 'fulfilled' ? keywords.value : []).filter((row) => isKeywordUsable(row.keyword));
     const comp = competitors.status === 'fulfilled' ? competitors.value : [];
     const seo  = seoAudits.status   === 'fulfilled' ? seoAudits.value   : [];
     const alertCount = alerts.status === 'fulfilled' ? alerts.value : 0;
