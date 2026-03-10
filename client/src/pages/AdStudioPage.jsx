@@ -254,6 +254,23 @@ function AdVariationCard({ ad, isBest, onCopy, onSave, savePending }) {
       {/* Quality */}
       {ad.qualityScore !== undefined && <QualityBar score={ad.qualityScore} />}
 
+      {(ad.relevance !== undefined || ad.emotionalTrigger !== undefined || ad.ctaClarity !== undefined || ad.uniqueness !== undefined) && (
+        <div className="grid grid-cols-2 gap-2 text-xs text-text-secondary">
+          <div>Relevance: {ad.relevance ?? '—'}</div>
+          <div>Emotion: {ad.emotionalTrigger ?? '—'}</div>
+          <div>CTA clarity: {ad.ctaClarity ?? '—'}</div>
+          <div>Uniqueness: {ad.uniqueness ?? '—'}</div>
+        </div>
+      )}
+
+      {(ad.displayUrl || ad.sitelinks?.length || ad.targetAudienceNote) && (
+        <div className="space-y-1 text-xs text-text-secondary">
+          {ad.displayUrl && <div>Display URL: {ad.displayUrl}</div>}
+          {ad.sitelinks?.length ? <div>Sitelinks: {ad.sitelinks.join(' • ')}</div> : null}
+          {ad.targetAudienceNote ? <div>Audience: {ad.targetAudienceNote}</div> : null}
+        </div>
+      )}
+
       {/* Why it works */}
       {(ad.qualityReason || ad.hook) && (
         <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', fontStyle: 'italic', lineHeight: 1.4 }}>

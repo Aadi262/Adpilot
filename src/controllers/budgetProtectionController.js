@@ -8,6 +8,7 @@ const { success, created } = require('../common/response');
 // GET /api/v1/budget-ai/scan
 exports.scan = async (req, res, next) => {
   try {
+    await ensureDefaultRules(req.user.teamId);
     const result = await BudgetGuardian.scan(req.user.teamId);
     return success(res, result);
   } catch (err) { next(err); }
@@ -16,9 +17,11 @@ exports.scan = async (req, res, next) => {
 // GET /api/v1/budget-ai/alerts
 exports.listAlerts = async (req, res, next) => {
   try {
+    await ensureDefaultRules(req.user.teamId);
     const alerts = await prisma.campaignAlert.findMany({
       where:   { teamId: req.user.teamId },
       orderBy: { createdAt: 'desc' },
+      include: { campaign: { select: { name: true } } },
     });
     return success(res, { alerts });
   } catch (err) { next(err); }
@@ -159,3 +162,17 @@ exports.applyFix = async (req, res, next) => {
     });
   } catch (err) { next(err); }
 };
+
+async function ensureDefaultRules(teamId) {
+  const existing = await prisma.campaignAlert.count({ where: { teamId } });
+  if (existing > 0) return;
+
+  await prisma.campaignAlert.createMany({
+    data: [
+      { teamId, campaignId: null, alertType: 'roas_drop', threshold: 1.5, action: 'notify' },
+      { teamId, campaignId: null, alertType: 'ctr_drop', threshold: 2.0, action: 'notify' },
+      { teamId, campaignId: null, alertType: 'cpa_spike', threshold: 60, action: 'notify' },
+      { teamId, campaignId: null, alertType: 'spend_limit', threshold: 2500, action: 'notify' },
+    ],
+  }).catch(() => {});
+}

@@ -153,7 +153,7 @@ export default function CompetitorHijackPage() {
           )}
           {result.isReal && !result.hasAiInsights && (
             <MockDataBanner
-              message="Real crawl data shown. Connect Gemini API for AI-powered keyword gap analysis and messaging insights."
+              message="Real crawl data shown. AI attack-plan recommendations are limited until an AI provider is configured."
             />
           )}
 
@@ -240,6 +240,17 @@ export default function CompetitorHijackPage() {
             </div>
           </div>
 
+          {result.timingInsights?.length > 0 && (
+            <div className="card">
+              <h3 className="text-sm font-semibold text-text-primary mb-3">Timing Insights</h3>
+              <div className="space-y-2">
+                {result.timingInsights.map((insight, i) => (
+                  <p key={i} className="text-xs text-text-secondary">{insight}</p>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* H1/H2 headings from their site */}
           {result.headings?.length > 0 && (
             <div>
@@ -265,12 +276,12 @@ export default function CompetitorHijackPage() {
               <div className="flex flex-wrap gap-2">
                 {result.topKeywords.slice(0, 15).map((kw, i) => (
                   <div key={i} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-bg-secondary border border-border">
-                    <span className="text-xs text-text-primary font-medium">{kw.word}</span>
+                    <span className="text-xs text-text-primary font-medium">{kw.keyword || kw.word}</span>
                     {kw.frequency && (
                       <span className="text-[10px] text-text-secondary">×{kw.frequency}</span>
                     )}
                     <button
-                      onClick={() => addKeywordMutation.mutate(kw.word)}
+                      onClick={() => addKeywordMutation.mutate(kw.keyword || kw.word)}
                       disabled={addKeywordMutation.isPending}
                       className="text-[10px] text-accent-blue hover:underline ml-1"
                     >
@@ -382,6 +393,23 @@ export default function CompetitorHijackPage() {
             </div>
           )}
 
+          {result.counterAdTemplates?.length > 0 && (
+            <div>
+              <h2 className="text-sm font-semibold text-text-primary mb-3">Counter-Ad Templates</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {result.counterAdTemplates.map((ad, i) => (
+                  <div key={i} className="card space-y-2">
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-accent-purple/10 text-accent-purple border border-accent-purple/20 font-medium">
+                      {ad.angle}
+                    </span>
+                    <p className="text-sm font-semibold text-text-primary">{ad.headline}</p>
+                    <p className="text-xs text-text-secondary">{ad.description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Messaging angles */}
           {result.messagingAngles?.length > 0 && (
             <div className="card">
@@ -423,7 +451,7 @@ export default function CompetitorHijackPage() {
             { icon: Globe,    color: 'text-accent-blue',    bg: 'bg-accent-blue/10',    title: 'Real Site Crawl',           desc: 'See their actual page structure, headlines, CTAs, and technology stack' },
             { icon: Key,      color: 'text-accent-blue',    bg: 'bg-accent-blue/10',    title: 'Keyword Intelligence',      desc: 'Extract the keywords they emphasize most — and track the gaps' },
             { icon: Target,   color: 'text-accent-purple',  bg: 'bg-accent-purple/10',  title: 'Messaging Angle Analysis',  desc: 'Identify their positioning and find gaps your brand can own' },
-            { icon: Sparkles, color: 'text-accent-green',   bg: 'bg-accent-green/10',   title: 'AI Strategic Insights',     desc: 'Gemini AI generates keyword gaps, weaknesses, and counter-ad ideas' },
+            { icon: Sparkles, color: 'text-accent-green',   bg: 'bg-accent-green/10',   title: 'AI Strategic Insights',     desc: 'AI generates keyword gaps, weaknesses, and counter-ad ideas from the live crawl' },
           ].map((f) => (
             <div key={f.title} className="card">
               <div className={`w-9 h-9 rounded-xl ${f.bg} flex items-center justify-center mb-3`}>

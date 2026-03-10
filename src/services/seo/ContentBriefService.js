@@ -9,6 +9,7 @@ const gemini      = require('../ai/GeminiService');
 const ollama      = require('../ai/OllamaService');
 const huggingface = require('../ai/HuggingFaceService');
 const anthropic   = require('../ai/AnthropicService');
+const serpIntelligence = require('./SerpIntelligenceService');
 
 const TfIdf     = natural.TfIdf;
 const tokenizer = new natural.WordTokenizer();
@@ -35,31 +36,32 @@ class ContentBriefService {
   async generate(teamId, targetKeyword) {
     if (!targetKeyword?.trim()) throw AppError.badRequest('targetKeyword is required');
 
+    const serpContext = await this._buildSerpContext(targetKeyword);
     let aiResult = null;
 
     // 1. Ollama (local, free, no API key)
     if (!aiResult && await ollama.isAvailable()) {
-      aiResult = await this._generateWithOllama(teamId, targetKeyword);
+      aiResult = await this._generateWithOllama(teamId, targetKeyword, serpContext);
     }
 
-    // 2. OpenAI (paid)
+    // 2. Gemini (free key)
+    if (!aiResult && gemini.isAvailable) {
+      aiResult = await this._generateWithGemini(teamId, targetKeyword, serpContext);
+    }
+
+    // 3. Anthropic Claude (paid key, very reliable fallback)
+    if (!aiResult && anthropic.isAvailable) {
+      aiResult = await this._generateWithAnthropic(teamId, targetKeyword, serpContext);
+    }
+
+    // 4. OpenAI (paid, generic fallback)
     if (!aiResult && config.openaiApiKey) {
       aiResult = await this._generateWithAI(targetKeyword);
     }
 
-    // 3. Gemini (free key)
-    if (!aiResult && gemini.isAvailable) {
-      aiResult = await this._generateWithGemini(teamId, targetKeyword);
-    }
-
-    // 4. HuggingFace (free key, Mistral-7B)
+    // 5. HuggingFace (free key, generic fallback)
     if (!aiResult && huggingface.isAvailable) {
       aiResult = await this._generateWithHuggingFace(teamId, targetKeyword);
-    }
-
-    // 5. Anthropic Claude (paid key, very reliable fallback)
-    if (!aiResult && anthropic.isAvailable) {
-      aiResult = await this._generateWithAnthropic(teamId, targetKeyword);
     }
 
     if (aiResult) {
@@ -74,11 +76,11 @@ class ContentBriefService {
           status:          'draft',
         },
       });
-      return { ...brief, ...aiResult, _source: 'ai' };
+      return { ...brief, ...aiResult, serpContext, _source: 'ai' };
     }
 
     // Fallback: deterministic TF-IDF
-    return this._generateFallback(teamId, targetKeyword);
+    return this._generateFallback(teamId, targetKeyword, serpContext);
   }
 
   /**
@@ -154,7 +156,7 @@ Return ONLY the JSON object, no markdown, no extra text.`;
   /**
    * Generate brief via Ollama (local, free, highest priority).
    */
-  async _generateWithOllama(teamId, targetKeyword) {
+  async _generateWithOllama(teamId, targetKeyword, serpContext) {
     try {
       const relatedKeywords = await prisma.keyword.findMany({
         where:  { teamId },
@@ -163,7 +165,7 @@ Return ONLY the JSON object, no markdown, no extra text.`;
       });
       const result = await ollama.generateContentBrief({
         keyword:         targetKeyword,
-        relatedKeywords: relatedKeywords.map(k => k.keyword),
+        relatedKeywords: [...relatedKeywords.map(k => k.keyword), ...(serpContext.relatedSearches || [])],
       });
       if (!result || !result.title || !Array.isArray(result.outline)) return null;
       if (!SEARCH_INTENTS.includes(result.searchIntent)) result.searchIntent = 'informational';
@@ -177,17 +179,19 @@ Return ONLY the JSON object, no markdown, no extra text.`;
   /**
    * Generate brief via Gemini (free tier fallback when OpenAI is absent).
    */
-  async _generateWithGemini(teamId, targetKeyword) {
+  async _generateWithGemini(teamId, targetKeyword, serpContext) {
     try {
       const relatedKeywords = await prisma.keyword.findMany({
         where:  { teamId },
         select: { keyword: true },
         take:   20,
       });
-      const result = await gemini.generateContentBrief({
-        keyword:         targetKeyword,
-        relatedKeywords: relatedKeywords.map(k => k.keyword),
-      });
+      const result = await this._generateSerpBackedBrief(
+        targetKeyword,
+        [...relatedKeywords.map(k => k.keyword), ...(serpContext.relatedSearches || [])],
+        serpContext,
+        'gemini'
+      );
       if (!result || !result.title || !Array.isArray(result.outline)) return null;
       if (!SEARCH_INTENTS.includes(result.searchIntent)) result.searchIntent = 'informational';
       return result;
@@ -200,18 +204,19 @@ Return ONLY the JSON object, no markdown, no extra text.`;
   /**
    * Generate brief via Anthropic Claude (reliable paid-key fallback).
    */
-  async _generateWithAnthropic(teamId, targetKeyword) {
+  async _generateWithAnthropic(teamId, targetKeyword, serpContext) {
     try {
       const relatedKeywords = await prisma.keyword.findMany({
         where:  { teamId },
         select: { keyword: true },
         take:   12,
       });
-      const result = await anthropic.generateContentBrief({
-        keyword:         targetKeyword,
-        relatedKeywords: relatedKeywords.map(k => k.keyword),
-        instructions:    'Make every section heading specific and actionable. Avoid generic headings like "What is X?" or "Why X Matters". Each heading should promise concrete value.',
-      });
+      const result = await this._generateSerpBackedBrief(
+        targetKeyword,
+        [...relatedKeywords.map(k => k.keyword), ...(serpContext.relatedSearches || [])],
+        serpContext,
+        'anthropic'
+      );
       if (!result || !result.title || !Array.isArray(result.outline)) return null;
       if (!SEARCH_INTENTS.includes(result.searchIntent)) result.searchIntent = 'informational';
       return { ...result, _source: 'anthropic' };
@@ -224,7 +229,7 @@ Return ONLY the JSON object, no markdown, no extra text.`;
   /**
    * Deterministic fallback using TF-IDF + team keyword pool.
    */
-  async _generateFallback(teamId, targetKeyword) {
+  async _generateFallback(teamId, targetKeyword, serpContext = {}) {
     const allKeywords     = await prisma.keyword.findMany({ where: { teamId } });
     const relatedKeywords = this._clusterRelated(targetKeyword, allKeywords);
     const semanticTerms   = this._extractSemanticTerms(targetKeyword, relatedKeywords);
@@ -251,12 +256,87 @@ Return ONLY the JSON object, no markdown, no extra text.`;
       metaDescription:  `A comprehensive guide to ${targetKeyword}. Learn everything you need to know about ${targetKeyword} in this in-depth article.`,
       targetWordCount:  this._estimateWordCount(avgDifficulty),
       searchIntent:     'informational',
-      competitorAngle:  'Cover foundational topics comprehensively while adding unique data, examples, and actionable tips.',
+      competitorAngle:  serpContext.topResults?.length
+        ? `Beat the current SERP leaders by covering ${serpContext.topResults.slice(0, 3).map((r) => r.title).join(' / ')} and then adding fresher examples and stronger comparisons.`
+        : 'Cover foundational topics comprehensively while adding unique data, examples, and actionable tips.',
       callToAction:     `Start implementing ${targetKeyword} best practices today.`,
       semanticTerms,
+      peopleAlsoAsk: serpContext.peopleAlsoAsk || [],
+      titleOptions: this._buildTitleOptions(targetKeyword),
       relatedKeywordsEnriched: relatedKeywords.slice(0, 10),
       _source: 'fallback',
     };
+  }
+
+  async _buildSerpContext(targetKeyword) {
+    const { snapshot, topResults } = await serpIntelligence.getTopResultDetails(targetKeyword, 5);
+    return {
+      searchVolume: null,
+      difficulty: null,
+      topResults,
+      peopleAlsoAsk: snapshot?.relatedQuestions || [],
+      relatedSearches: snapshot?.relatedSearches || [],
+    };
+  }
+
+  async _generateSerpBackedBrief(targetKeyword, relatedKeywords, serpContext, provider) {
+    const prompt = `You are a content strategist creating a brief for a writer.
+
+TARGET KEYWORD: "${targetKeyword}"
+SEARCH VOLUME: ${serpContext.searchVolume ?? 'null'}/month
+KEYWORD DIFFICULTY: ${serpContext.difficulty ?? 'null'}/100
+
+TOP 5 RANKING ARTICLES:
+${(serpContext.topResults || []).map((r, i) => `${i + 1}. "${r.title}" — ${r.link}
+   Word count: ~${r.wordCount || 0}
+   Headings: ${(r.headings || []).join(' | ') || 'n/a'}`).join('\n')}
+
+PEOPLE ALSO ASK:
+${(serpContext.peopleAlsoAsk || []).join('\n') || 'n/a'}
+
+RELATED SEARCHES:
+${(serpContext.relatedSearches || []).join(', ') || relatedKeywords.join(', ')}
+
+Generate a JSON object with these exact fields:
+{
+  "title": "SEO-optimized H1 title",
+  "metaDescription": "150-160 char meta description",
+  "targetWordCount": 1800,
+  "searchIntent": "informational",
+  "outline": [{"heading":"...","subpoints":["..."]}],
+  "relatedKeywords": ["..."],
+  "competitorAngle": "how to beat the ranking pages",
+  "callToAction": "primary CTA suggestion",
+  "titleOptions": ["...", "...", "..."],
+  "peopleAlsoAsk": ["...", "..."],
+  "uniqueAngle": "what top results are missing"
+}
+
+Rules:
+- Use the competitor headings and PAA questions directly in the planning.
+- Avoid generic sections like "What is ${targetKeyword}?" unless the SERP clearly demands it.
+- Return valid JSON only.`;
+
+    let raw = null;
+    if (provider === 'anthropic') raw = await anthropic.generate(prompt, { maxTokens: 1400, temperature: 0.35 });
+    if (provider === 'gemini') raw = await gemini.generate(prompt, { maxTokens: 1400, temperature: 0.35 });
+
+    const parsed = anthropic.parseJSON(raw);
+    if (!parsed || !parsed.title || !Array.isArray(parsed.outline)) return null;
+    if (!SEARCH_INTENTS.includes(parsed.searchIntent)) parsed.searchIntent = 'informational';
+    parsed.relatedKeywords = (parsed.relatedKeywords || relatedKeywords).slice(0, 20);
+    parsed.titleOptions = (parsed.titleOptions || this._buildTitleOptions(targetKeyword)).slice(0, 5);
+    parsed.peopleAlsoAsk = (parsed.peopleAlsoAsk || serpContext.peopleAlsoAsk || []).slice(0, 5);
+    return parsed;
+  }
+
+  _buildTitleOptions(keyword) {
+    const cap = keyword.charAt(0).toUpperCase() + keyword.slice(1);
+    return [
+      `${cap}: The Practical Guide`,
+      `How to Win With ${cap}`,
+      `${cap} Strategy: What Actually Works`,
+    ];
   }
 
   _clusterRelated(target, keywords) {

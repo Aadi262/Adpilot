@@ -59,17 +59,42 @@ async function generateAdWithAI(campaignId, brief, teamId) {
   };
 
   const ANGLES = ['Social Proof', 'Problem/Solution', 'Curiosity', 'Fear of Missing Out'];
+  const keywordLower = (adParams.keyword || adParams.product || '').toLowerCase();
+
+  const scoreVariation = (variation) => {
+    const headline = String(variation.headline || '').trim();
+    const body = String(variation.body || variation.primaryText || variation.description || '').trim();
+    const cta = String(variation.cta || variation.callToAction || '').trim();
+    const combined = `${headline} ${body}`.toLowerCase();
+
+    const relevance = Math.min(100, 45 + (keywordLower && combined.includes(keywordLower) ? 30 : 0) + (headline.length >= 10 && headline.length <= 30 ? 15 : 5));
+    const emotionalTrigger = Math.min(100, 35 + (/(save|secret|fear|limited|trusted|proven|fast|now|free|exclusive)/i.test(`${headline} ${body}`) ? 35 : 10) + (/!/.test(body) ? 10 : 0));
+    const ctaClarity = Math.min(100, 40 + (cta.length >= 2 ? 20 : 0) + (/(start|book|buy|learn|try|get|download|shop)/i.test(cta) ? 25 : 10));
+    const uniqueness = Math.min(100, 40 + new Set(combined.split(/\s+/).filter(Boolean)).size);
+    const qualityScore = Math.round((relevance * 0.35) + (emotionalTrigger * 0.2) + (ctaClarity * 0.2) + (uniqueness * 0.25));
+
+    return {
+      relevance,
+      emotionalTrigger,
+      ctaClarity,
+      uniqueness,
+      qualityScore,
+      qualityReason: `Relevance ${relevance}/100, emotional trigger ${emotionalTrigger}/100, CTA clarity ${ctaClarity}/100, uniqueness ${uniqueness}/100.`,
+    };
+  };
 
   const toVariations = (aiResult, source) =>
     Array.isArray(aiResult)
       ? aiResult.map((v, i) => ({
+          ...scoreVariation(v),
           // New frontend format
           angle:         v.angle || ANGLES[i % ANGLES.length],
           headline:      v.headline,
           body:          v.body || v.primaryText || v.description || '',
           cta:           v.cta || v.callToAction || 'Learn More',
-          qualityScore:  v.qualityScore ?? Math.floor(65 + Math.random() * 30),
-          qualityReason: v.qualityReason || v.reasoning || '',
+          displayUrl:    v.displayUrl || 'adpilot.io',
+          sitelinks:     Array.isArray(v.sitelinks) ? v.sitelinks : ['Pricing', 'Demo', 'Case Studies'],
+          targetAudienceNote: v.targetAudienceNote || adParams.targetAudience,
           hook:          v.hook || '',
           bestFor:       v.bestFor || '',
           // Legacy format kept for save-to-campaign flow
@@ -117,11 +142,11 @@ async function generateAdWithAI(campaignId, brief, teamId) {
   const pl = campaign?.platform || brief.platform || 'meta';
   const prod = brief.productName || brief.keyword || 'Your Product';
   return [
-    { angle: 'Social Proof',       headline: `${prod} – Trusted by Thousands`,      body: `Discover how ${prod} can transform your results. Join thousands of happy customers.`, cta: 'Learn More',    qualityScore: 72, qualityReason: 'Social proof builds trust quickly.', platform: pl, status: 'draft', isMock: true },
-    { angle: 'Problem/Solution',   headline: `Tired of Mediocre Results?`,           body: `${prod} solves the #1 problem you've been struggling with. Get real results fast.`,   cta: 'Try Risk-Free', qualityScore: 78, qualityReason: 'Pain-point hook drives high relevance.', platform: pl, status: 'draft', isMock: true },
-    { angle: 'Curiosity',          headline: `The Secret Behind Top Performers`,     body: `What if the difference between you and the best wasn't skill — it was ${prod}?`,       cta: 'Find Out',      qualityScore: 69, qualityReason: 'Curiosity gap encourages clicks.', platform: pl, status: 'draft', isMock: true },
-    { angle: 'Fear of Missing Out', headline: `Only 48 Hours Left – Don't Miss Out`, body: `${prod} is changing the game. Those who move first win. Don't let competitors get there first.`, cta: 'Act Now', qualityScore: 74, qualityReason: 'Urgency + FOMO drives conversion.', platform: pl, status: 'draft', isMock: true },
-  ];
+    { angle: 'Social Proof', headline: `${prod} Trusted Daily`.slice(0, 30), body: `See why customers choose ${prod} to get faster results.`, cta: 'Learn More', displayUrl: 'adpilot.io', sitelinks: ['Reviews', 'Demo'], targetAudienceNote: adParams.targetAudience, platform: pl, status: 'draft', isMock: true },
+    { angle: 'Problem/Solution', headline: `Fix ${prod} Pain Fast`.slice(0, 30), body: `${prod} solves the biggest blocker stopping conversions right now.`, cta: 'Try Today', displayUrl: 'adpilot.io', sitelinks: ['Pricing', 'Features'], targetAudienceNote: adParams.targetAudience, platform: pl, status: 'draft', isMock: true },
+    { angle: 'Curiosity', headline: `Why Top Teams Pick ${prod}`.slice(0, 30), body: `The fastest-growing teams are switching to ${prod}. See what they know.`, cta: 'Find Out', displayUrl: 'adpilot.io', sitelinks: ['How It Works', 'Results'], targetAudienceNote: adParams.targetAudience, platform: pl, status: 'draft', isMock: true },
+    { angle: 'Fear of Missing Out', headline: `Don’t Miss ${prod}`.slice(0, 30), body: `Move before your competitors do. ${prod} helps teams capture demand faster.`, cta: 'Act Now', displayUrl: 'adpilot.io', sitelinks: ['Demo', 'Pricing'], targetAudienceNote: adParams.targetAudience, platform: pl, status: 'draft', isMock: true },
+  ].map((variation) => ({ ...variation, ...scoreVariation(variation) }));
 }
 
 module.exports = {

@@ -75,7 +75,7 @@ exports.hijackAnalysis = async (req, res, next) => {
     const { domain } = req.query;
     if (!domain) throw AppError.badRequest('domain query param is required');
 
-    const analysis = await competitorHijackService.analyzeCompetitor(domain, req.user.teamId);
+    const analysis = await competitorHijackService.analyzeCompetitor(domain, req.user.teamId, 'attack');
     // Persist topKeywords back to competitor record (enables Gaps tab)
     await _saveCompetitorKeywords(analysis, req.user.teamId);
     const report = await _saveResearchReport({
@@ -97,7 +97,7 @@ exports.analyzeUrl = async (req, res, next) => {
     if (!url) throw AppError.badRequest('url is required');
 
     const clean = url.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].trim();
-    const analysis = await competitorHijackService.analyzeCompetitor(clean, req.user.teamId);
+    const analysis = await competitorHijackService.analyzeCompetitor(clean, req.user.teamId, 'overview');
     // Persist topKeywords back to competitor record (enables Gaps tab)
     await _saveCompetitorKeywords(analysis, req.user.teamId);
     const report = await _saveResearchReport({

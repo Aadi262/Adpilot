@@ -28,10 +28,34 @@ class BudgetGuardian {
     });
 
     const alerts = [];
+    let totalSpend = 0;
+    let totalBudget = 0;
+    let totalConversions = 0;
+    let totalRevenue = 0;
+    const campaignSummaries = [];
 
     for (const campaign of campaigns) {
       const perf  = campaign.performance ?? {};
       const spend = perf.spend ?? 0;
+      const conversions = perf.conversions ?? 0;
+      const revenue = perf.revenue ?? 0;
+      const ctr = perf.ctr ?? null;
+      const cpa = perf.cpa ?? null;
+      totalSpend += Number(spend) || 0;
+      totalBudget += Number(campaign.budget) || 0;
+      totalConversions += Number(conversions) || 0;
+      totalRevenue += Number(revenue) || 0;
+      campaignSummaries.push({
+        id: campaign.id,
+        name: campaign.name,
+        platform: campaign.platform,
+        status: campaign.status,
+        spend: Number(spend) || 0,
+        budget: Number(campaign.budget) || 0,
+        ctr,
+        cpa,
+        roas: perf.roas ?? null,
+      });
 
       // Skip campaigns with no meaningful spend
       if (spend < DEFAULTS.minSpend) continue;
@@ -78,11 +102,36 @@ class BudgetGuardian {
       alerts.push(...autoAlerts);
     }
 
+    const spendVelocity = totalBudget > 0 ? Number(((totalSpend / totalBudget) * 100).toFixed(1)) : 0;
+    const blendedCpa = totalConversions > 0 ? Number((totalSpend / totalConversions).toFixed(2)) : null;
+    const blendedRoas = totalSpend > 0 ? Number((totalRevenue / totalSpend).toFixed(2)) : null;
+    const anomalies = campaignSummaries
+      .filter((c) => (c.ctr !== null && c.ctr < 2) || (c.spend > c.budget && c.budget > 0))
+      .map((c) => ({
+        campaignId: c.id,
+        campaignName: c.name,
+        message: c.ctr !== null && c.ctr < 2
+          ? `CTR dropped below 2% on ${c.name}`
+          : `Spend exceeded budget on ${c.name}`,
+      }))
+      .slice(0, 5);
+
     return {
       status:        alerts.some(a => a.severity === 'critical')
                        ? 'critical'
                        : alerts.length > 0 ? 'warning' : 'healthy',
       alerts,
+      summary: {
+        dailySpend: totalSpend,
+        dailyBudget: totalBudget,
+        weeklySpend: Number((totalSpend * 7).toFixed(2)),
+        monthlySpend: Number((totalSpend * 30).toFixed(2)),
+        spendVelocity,
+        blendedCpa,
+        blendedRoas,
+      },
+      anomalies,
+      campaigns: campaignSummaries,
       campaignCount: campaigns.length,
       scannedAt:     new Date().toISOString(),
     };

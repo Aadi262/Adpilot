@@ -597,31 +597,43 @@ exports.researchKeyword = async (req, res, next) => {
 
     // Normalize the nested service shape into the flat shape the frontend expects
     const t = data.trends  || {};
-    const i = data.insights || {};
+    const i = data.analysis || {};
     const sourceLabels = Object.entries(data.sources || {})
       .filter(([, v]) => v)
-      .map(([k]) => ({ googleAutocomplete: 'Google Autocomplete', ddgSuggest: 'DuckDuckGo', googleTrends: 'Google Trends', aiInsights: 'AI Insights' }[k] || k))
+      .map(([k]) => ({ googleAutocomplete: 'Google Autocomplete', ddgSuggest: 'DuckDuckGo', googleTrends: 'Google Trends', valueSerp: 'ValueSERP', aiInsights: 'AI Insights' }[k] || k))
       .join(' + ') || 'Google Autocomplete';
 
     const normalized = {
       keyword:          data.keyword,
-      found:            (data.suggestions || []).length > 0 || t.averageInterest > 0,
+      found:            (data.relatedSearches || []).length > 0 || t.averageInterest > 0 || (data.topResults || []).length > 0,
       // Trend fields (flattened)
-      trend:            t.trend === 'declining' ? 'falling' : (t.trend || 'stable'),
-      trendScore:       t.averageInterest || 0,
+      trend:            i.trendDirection || (t.trend === 'declining' ? 'falling' : (t.trend || 'stable')),
+      trendScore:       i.trendScore ?? t.averageInterest ?? 0,
       trendAvg:         t.averageInterest || 0,
       trendHistory:     (t.dataPoints || []).map(p => ({ label: p.date, score: p.value })),
+      trendDeltaPct:    t.deltaPct ?? 0,
+      trendReason:      i.trendReason || null,
       // AI insight fields (flattened)
-      difficulty:       i.difficulty || null,
-      intent:           i.intent     || null,
-      estimatedCpc:     i.estimatedCpc || null,
-      bestPlatform:     i.intent === 'transactional' ? 'Google' : i.intent === 'commercial' ? 'Meta' : null,
-      aiInsight:        i.summary   || null,
-      targetedAngles:   i.targetedAngles   || [],
+      difficulty:       i.difficulty ?? null,
+      difficultyLabel:  i.difficultyLabel ?? null,
+      intent:           i.intent ?? null,
+      intentExplanation: i.intentExplanation ?? null,
+      estimatedCpc:     data.cpc ?? null,
+      bestPlatform:     i.intent === 'transactional' ? 'Google' : i.intent === 'commercial' ? 'Google + Meta' : null,
+      aiInsight:        i.opportunityReason || null,
+      opportunityScore: i.opportunityScore ?? 0,
+      opportunityReason: i.opportunityReason ?? null,
+      targetedAngles:   i.targetedAngles || [],
       negativeKeywords: i.negativeKeywords || [],
       // Suggestions
-      suggestions:      data.suggestions || [],
-      relatedKeywords:  [],
+      suggestions:      data.relatedSearches || [],
+      relatedKeywords:  i.relatedKeywords || [],
+      serpFeatures:     data.serpFeatures || [],
+      relatedQuestions: data.relatedQuestions || [],
+      topResults:       data.topResults || [],
+      searchVolume:     data.searchVolume,
+      totalResults:     data.totalResults,
+      contentAngle:     i.contentAngle || null,
       // Meta
       source:           sourceLabels,
       sources:          data.sources,

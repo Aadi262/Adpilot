@@ -6,6 +6,7 @@ const gemini             = require('./GeminiService');
 const ollama             = require('./OllamaService');
 const huggingface        = require('./HuggingFaceService');
 const anthropic          = require('./AnthropicService');
+const serpIntelligence   = require('../seo/SerpIntelligenceService');
 
 class CompetitorHijackService {
   /**
@@ -14,7 +15,7 @@ class CompetitorHijackService {
    * 2. Gemini AI for strategic insights (keyword gaps, messaging angles, suggested ads)
    * 3. Falls back to smart mock if crawl fails (e.g. site blocks bots)
    */
-  async analyzeCompetitor(domain, teamId) {
+  async analyzeCompetitor(domain, teamId, mode = 'attack') {
     const cleanDomain = domain
       .replace(/^https?:\/\//, '')
       .replace(/^www\./, '')
@@ -36,12 +37,13 @@ class CompetitorHijackService {
     // If crawl succeeded, optionally enrich with AI insights (Ollama → Gemini)
     if (crawlData) {
       let aiInsights = null;
+      const enrichedKeywords = await serpIntelligence.enrichKeywordList((crawlData.topKeywords || []).slice(0, 8));
       const aiParams = {
         domain:      crawlData.domain,
         title:       crawlData.title,
         description: crawlData.description,
         ctas:        crawlData.ctas,
-        topKeywords: crawlData.topKeywords,
+        topKeywords: enrichedKeywords.length ? enrichedKeywords : crawlData.topKeywords,
         techStack:   crawlData.techStack,
         headings:    crawlData.headings,
       };
@@ -98,14 +100,14 @@ class CompetitorHijackService {
           }))
         : this._buildAdExamplesFromCrawl(crawlData);
 
-      return {
+      const baseResult = {
         domain:            crawlData.domain,
         url:               crawlData.url,
         title:             crawlData.title,
         description:       crawlData.description,
         headings:          crawlData.headings,
         ctas:              crawlData.ctas,
-        topKeywords:       crawlData.topKeywords,
+        topKeywords:       enrichedKeywords.length ? enrichedKeywords : crawlData.topKeywords,
         techStack:         crawlData.techStack,
         linkCount:         crawlData.linkCount,
         hasAnalytics:      crawlData.hasAnalytics,
@@ -127,10 +129,106 @@ class CompetitorHijackService {
         hasAiInsights: !!aiInsights,
         crawledAt:  crawlData.crawledAt,
       };
+
+      return mode === 'overview'
+        ? this._buildOverviewResult(baseResult, crawlData, aiInsights)
+        : this._buildAttackResult(baseResult, crawlData, aiInsights);
     }
 
     // Full fallback: smart mock (deterministic, honest label)
-    return this._mockFallback(cleanDomain);
+    const fallback = this._mockFallback(cleanDomain);
+    return mode === 'overview'
+      ? this._buildOverviewResult(fallback, fallback, null)
+      : this._buildAttackResult(fallback, fallback, null);
+  }
+
+  _buildOverviewResult(baseResult, crawlData, aiInsights) {
+    const topKeywords = (baseResult.topKeywords || []).slice(0, 10).map((kw) => ({
+      keyword: kw.keyword || kw.word,
+      volume: kw.searchVolume ?? null,
+      position: kw.position ?? null,
+      serpFeatures: kw.serpFeatures ?? [],
+    }));
+
+    return {
+      ...baseResult,
+      mode: 'overview',
+      trafficEstimate: null,
+      threatLevel: this._computeThreatLevel(topKeywords, crawlData),
+      socialLinks: [],
+      structuredDataPresent: Boolean(crawlData?.headings?.length),
+      pageSpeedScore: null,
+      metaTags: {
+        title: crawlData.title || null,
+        description: crawlData.description || null,
+      },
+      contentStrategy: {
+        headlineCount: crawlData.headings?.length || 0,
+        ctaCount: crawlData.ctas?.length || 0,
+        contentTypes: this._detectContentTypes(crawlData),
+        topics: topKeywords.slice(0, 8),
+      },
+      strengths: baseResult.strengths || this._buildOverviewStrengths(crawlData),
+      weaknesses: baseResult.weaknesses || this._buildOverviewWeaknesses(crawlData),
+      topKeywords,
+      adExamples: [],
+      keywordGaps: [],
+      winbackOpportunities: [],
+    };
+  }
+
+  _buildAttackResult(baseResult, crawlData, aiInsights) {
+    return {
+      ...baseResult,
+      mode: 'attack',
+      weakestPages: (crawlData.headings || []).slice(0, 3).map((h, idx) => ({
+        page: h.text,
+        reason: idx === 0 ? 'Weak differentiation in headline copy' : 'Likely low CTR due to generic positioning',
+      })),
+      counterAdTemplates: (baseResult.adExamples || []).slice(0, 3).map((ad, idx) => ({
+        angle: ['Relevance', 'Unique value', 'Stronger CTA'][idx] || 'Counter-positioning',
+        headline: `${(ad.headline || baseResult.domain).slice(0, 28)}`.trim(),
+        description: (ad.description || `Choose an alternative to ${baseResult.domain} with clearer ROI and faster setup.`).slice(0, 88),
+      })),
+      timingInsights: baseResult.hasAiInsights
+        ? ['Paid competition exists on this SERP, indicating active budget pressure.', 'Monitor this keyword weekly for new ad copy changes.']
+        : ['Live spend timing data is unavailable without ad network transparency APIs.'],
+    };
+  }
+
+  _computeThreatLevel(topKeywords, crawlData) {
+    const keywordCount = topKeywords.length;
+    const techScore = crawlData.techStack?.length || 0;
+    const ctaScore = crawlData.ctas?.length || 0;
+    const total = keywordCount + techScore + ctaScore;
+    if (total >= 20) return 'Critical';
+    if (total >= 14) return 'High';
+    if (total >= 8) return 'Medium';
+    return 'Low';
+  }
+
+  _detectContentTypes(crawlData) {
+    const types = [];
+    if (crawlData.headings?.some((h) => /blog|guide|learn/i.test(h.text))) types.push('educational');
+    if (crawlData.ctas?.some((cta) => /demo|book|schedule/i.test(cta))) types.push('sales-led');
+    if (crawlData.ctas?.some((cta) => /pricing|free trial|start/i.test(cta))) types.push('conversion-led');
+    return types.length ? types : ['product-led'];
+  }
+
+  _buildOverviewStrengths(crawlData) {
+    const strengths = [];
+    if (crawlData.techStack?.length) strengths.push('Modern marketing and analytics stack detected');
+    if (crawlData.ctas?.length >= 3) strengths.push('Strong conversion path with multiple CTA entry points');
+    if (crawlData.headings?.length >= 5) strengths.push('Content structure is dense enough to support topic coverage');
+    return strengths;
+  }
+
+  _buildOverviewWeaknesses(crawlData) {
+    const weaknesses = [];
+    if (!crawlData.techStack?.includes('Google Analytics')) weaknesses.push('Limited analytics stack detected');
+    if ((crawlData.ctas?.length || 0) < 2) weaknesses.push('Weak conversion path with too few CTA variations');
+    if ((crawlData.headings?.length || 0) < 4) weaknesses.push('Thin on-page structure suggests shallow topical depth');
+    return weaknesses;
   }
 
   _buildAdExamplesFromCrawl(crawl) {

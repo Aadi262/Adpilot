@@ -211,6 +211,9 @@ function normalizeMarketResearchResult(data = {}) {
     strengths: data.strengths || [],
     keywordGaps: (data.keywordGaps || []).slice(0, 5),
     hasAiInsights: data.hasAiInsights || false,
+    threatLevel: data.threatLevel || null,
+    contentTypes: data.contentStrategy?.contentTypes || [],
+    topics: data.contentStrategy?.topics || [],
     savedAt: data.savedAt || null,
   };
 }
@@ -336,10 +339,19 @@ function MarketResearchSection() {
             <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1">{result.domain}</p>
             <p className="text-sm text-text-primary font-medium">{result.title}</p>
             {result.description && <p className="text-xs text-text-secondary mt-1 line-clamp-2">{result.description}</p>}
+            {result.threatLevel && <p className="text-xs text-accent-blue mt-2">Threat level: {result.threatLevel}</p>}
             {result.techStack.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-2">
                 {result.techStack.slice(0, 6).map(t => (
                   <span key={t} className="text-xs px-2 py-0.5 rounded bg-bg-surface border border-border text-text-secondary">{t}</span>
+                ))}
+              </div>
+            )}
+
+            {result.contentTypes.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {result.contentTypes.map((type) => (
+                  <span key={type} className="text-xs px-2 py-0.5 rounded bg-accent-blue/10 border border-accent-blue/20 text-accent-blue">{type}</span>
                 ))}
               </div>
             )}
@@ -381,6 +393,19 @@ function MarketResearchSection() {
                 <div className="flex flex-wrap gap-1.5">
                   {result.topKeywords.map((kw) => (
                     <span key={kw} className="text-xs px-2.5 py-1 rounded-full border border-border text-text-secondary">{kw}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {result.topics.length > 0 && (
+              <div className="card">
+                <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-3">Topical Coverage</p>
+                <div className="space-y-1.5">
+                  {result.topics.slice(0, 6).map((topic, i) => (
+                    <div key={i} className="text-xs text-text-secondary">
+                      {(topic.keyword || topic.word || topic)}
+                    </div>
                   ))}
                 </div>
               </div>
@@ -762,9 +787,15 @@ function KeywordResearchSection() {
                   {kwResult.difficulty && (
                     <div>
                       <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Difficulty</div>
-                      <div style={{ fontSize: 18, fontWeight: 600, color: 'rgba(255,255,255,0.75)' }}>{kwResult.difficulty}</div>
+                      <div style={{ fontSize: 18, fontWeight: 600, color: 'rgba(255,255,255,0.75)' }}>{kwResult.difficulty}{kwResult.difficultyLabel ? ` · ${kwResult.difficultyLabel}` : ''}</div>
                     </div>
                   )}
+                  {kwResult.opportunityScore ? (
+                    <div>
+                      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Opportunity</div>
+                      <div style={{ fontSize: 18, fontWeight: 600, color: 'rgba(255,255,255,0.75)' }}>{kwResult.opportunityScore}/100</div>
+                    </div>
+                  ) : null}
                   {kwResult.bestPlatform && (
                     <div>
                       <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Best Platform</div>
@@ -834,6 +865,36 @@ function KeywordResearchSection() {
               </div>
             )}
           </div>
+
+          <div className="grid sm:grid-cols-2 gap-4">
+            {kwResult.intent && (
+              <div className="card">
+                <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Intent</p>
+                <p className="text-sm text-text-primary capitalize">{kwResult.intent}</p>
+                {kwResult.intentExplanation && <p className="text-xs text-text-secondary mt-1 leading-relaxed">{kwResult.intentExplanation}</p>}
+              </div>
+            )}
+
+            {kwResult.serpFeatures?.length > 0 && (
+              <div className="card">
+                <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">SERP Features</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {kwResult.serpFeatures.map((feature) => (
+                    <span key={feature} className="text-xs px-2.5 py-1 rounded-full border border-border text-text-secondary">
+                      {feature.replace(/_/g, ' ')}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {kwResult.contentAngle && (
+            <div className="card">
+              <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Content Angle</p>
+              <p className="text-sm text-text-secondary leading-relaxed">{kwResult.contentAngle}</p>
+            </div>
+          )}
         </div>
       )}
 

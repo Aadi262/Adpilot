@@ -1,23 +1,11 @@
 'use strict';
 
-/**
- * KeywordResearchService — free keyword data using:
- *   1. Google Autocomplete  (no key, ~10 suggestions)
- *   2. DuckDuckGo Suggest   (no key, ~10 more)
- *   3. Google Trends        (no key via google-trends-api)
- *   4. Anthropic/Gemini AI  (difficulty + intent labels)
- *
- * All sources are best-effort — failures are swallowed and
- * the response is built from whatever succeeded.
- */
-
-const axios        = require('axios');
-const logger       = require('../../config/logger');
-const anthropic    = require('../ai/AnthropicService');
-const gemini       = require('../ai/GeminiService');
+const axios = require('axios');
+const logger = require('../../config/logger');
+const anthropic = require('../ai/AnthropicService');
+const gemini = require('../ai/GeminiService');
+const serpIntelligence = require('./SerpIntelligenceService');
 const { withTimeout } = require('../../utils/timeout');
-
-// ── Source helpers ────────────────────────────────────────────────────────────
 
 async function googleAutocomplete(q) {
   try {
@@ -26,7 +14,6 @@ async function googleAutocomplete(q) {
       axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 5000 }),
       6000
     );
-    // Response format: [query, [suggestion1, suggestion2, ...]]
     return Array.isArray(data) && Array.isArray(data[1]) ? data[1].slice(0, 10) : [];
   } catch {
     return [];
@@ -40,7 +27,6 @@ async function ddgSuggest(q) {
       axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 5000 }),
       6000
     );
-    // Response format: [query, [suggestion1, suggestion2, ...]]
     return Array.isArray(data) && Array.isArray(data[1]) ? data[1].slice(0, 10) : [];
   } catch {
     return [];
@@ -50,8 +36,7 @@ async function ddgSuggest(q) {
 async function googleTrends(q) {
   const googleTrendsApi = require('google-trends-api');
 
-  // Google Trends can fail for very short or single-word queries — retry helpers
-  async function _fetch(keyword) {
+  async function fetchTrend(keyword) {
     const raw = await withTimeout(
       googleTrendsApi.interestOverTime({
         keyword,
@@ -59,63 +44,111 @@ async function googleTrends(q) {
       }),
       12000
     );
-    const parsed   = JSON.parse(raw);
+    const parsed = JSON.parse(raw);
     const timeline = parsed?.default?.timelineData || [];
     if (!timeline.length) return null;
-    const values = timeline.map(p => p.value?.[0] || 0);
+    const values = timeline.map((p) => p.value?.[0] || 0);
+    const first = values[0] || 0;
+    const last = values[values.length - 1] || 0;
+    const deltaPct = first > 0 ? Math.round(((last - first) / first) * 100) : 0;
     return {
       averageInterest: Math.round(values.reduce((a, b) => a + b, 0) / values.length),
-      peakInterest:    Math.max(...values),
-      trend:           values.length >= 2
-        ? (values[values.length - 1] > values[0] ? 'rising' : 'declining')
-        : 'stable',
-      dataPoints: timeline.slice(-12).map(p => ({
-        date:  p.formattedTime,
+      peakInterest: Math.max(...values),
+      trend: Math.abs(deltaPct) < 8 ? 'stable' : deltaPct > 0 ? 'rising' : 'falling',
+      deltaPct,
+      dataPoints: timeline.slice(-12).map((p) => ({
+        date: p.formattedTime,
         value: p.value?.[0] || 0,
       })),
     };
   }
 
   try {
-    // First attempt: exact query
-    const result = await _fetch(q);
-    if (result) return result;
-
-    // Retry: append a common word to make single-word queries more specific
-    // (Google Trends sometimes returns empty for very generic single keywords)
-    if (!q.includes(' ')) {
-      const result2 = await _fetch(`${q} online`);
-      if (result2) return result2;
-    }
-
-    return null;
+    return await fetchTrend(q) || (!q.includes(' ') ? await fetchTrend(`${q} online`) : null);
   } catch (err) {
-    logger.debug('KeywordResearchService: trends failed', { err: err.message });
+    logger.debug('KeywordResearchService: trends failed', { keyword: q, err: err.message });
     return null;
   }
 }
 
-async function aiInsights(q, suggestions) {
-  const prompt = `Analyze this keyword and related suggestions for SEO/PPC use.
+function buildFallbackAnalysis({ keyword, trends, serpSnapshot, relatedKeywords }) {
+  const avgInterest = trends?.averageInterest || 0;
+  const paidAds = serpSnapshot?.paidResults?.length || 0;
+  const totalResults = serpSnapshot?.totalResults || 0;
+  const serpFeatures = serpSnapshot?.serpFeatures || [];
+  const competitionPressure = Math.min(100, Math.round((paidAds * 12) + (serpFeatures.length * 8) + (totalResults > 1000000 ? 20 : 5)));
+  const difficulty = Math.min(100, Math.max(18, competitionPressure));
+  const intent = paidAds >= 3 ? 'commercial' : serpFeatures.includes('people_also_ask') ? 'informational' : 'navigational';
+  const opportunityScore = Math.max(15, Math.min(100, Math.round((avgInterest * 0.55) + ((100 - difficulty) * 0.35) + (intent === 'commercial' ? 12 : 4))));
 
-Keyword: "${q}"
-Related suggestions: ${suggestions.slice(0, 8).join(', ')}
+  return {
+    trendScore: avgInterest,
+    trendDirection: trends?.trend || 'stable',
+    trendReason: trends
+      ? `Interest is ${trends.trend} with a ${trends.deltaPct >= 0 ? '+' : ''}${trends.deltaPct}% 90-day change.`
+      : 'Trend data is limited, so this is based on SERP momentum only.',
+    difficulty,
+    difficultyLabel: difficulty < 30 ? 'Easy' : difficulty < 55 ? 'Medium' : difficulty < 75 ? 'Hard' : 'Very Hard',
+    intent,
+    intentExplanation: paidAds >= 3
+      ? 'Multiple paid ads suggest buyers are already in-market.'
+      : serpFeatures.includes('people_also_ask')
+      ? 'People Also Ask results suggest users are researching the topic.'
+      : 'The query appears brand-led or mixed intent from the current SERP.',
+    opportunityScore,
+    opportunityReason: `Opportunity is driven by ${avgInterest}/100 trend interest against a difficulty score of ${difficulty}/100.`,
+    serpFeatures,
+    relatedKeywords: relatedKeywords.slice(0, 8).map((item) => ({
+      keyword: item.keyword,
+      volume: item.searchVolume,
+      difficulty: Math.max(15, difficulty - 8),
+      relevance: 'high',
+    })),
+    contentAngle: `Create a decision-stage page around "${keyword}" that answers the top questions and targets the strongest SERP gaps.`,
+  };
+}
 
-Return ONLY valid JSON (no markdown):
+async function aiInsights(payload) {
+  const prompt = `You are an SEO analyst. Given this keyword data from search APIs:
+- Keyword: "${payload.keyword}"
+- Search Volume: ${payload.searchVolume ?? 'null'}
+- CPC: ${payload.cpc ?? 'null'}
+- Competition: ${payload.competition ?? 'null'}
+- Trend average: ${payload.trendAverage ?? 'null'}
+- Trend change: ${payload.trendDeltaPct ?? 'null'}%
+- SERP Features: ${(payload.serpFeatures || []).join(', ') || 'none'}
+- Top ranking pages:
+${(payload.topResults || []).slice(0, 5).map((r, i) => `${i + 1}. ${r.title} | ${r.domain || r.link}`).join('\n')}
+- Related terms: ${(payload.relatedKeywords || []).map((r) => r.keyword).join(', ')}
+
+Provide analysis in this EXACT JSON format:
 {
-  "difficulty": "low|medium|high",
-  "intent": "informational|commercial|transactional|navigational",
-  "estimatedCpc": "$X.XX",
-  "targetedAngles": ["angle 1", "angle 2", "angle 3"],
-  "negativeKeywords": ["neg 1", "neg 2"],
-  "summary": "1-sentence analysis"
-}`;
+  "trendScore": <number 0-100 based on volume trajectory>,
+  "trendDirection": "rising",
+  "trendReason": "<one sentence>",
+  "difficulty": <number 0-100>,
+  "difficultyLabel": "Easy",
+  "intent": "informational",
+  "intentExplanation": "<why this intent>",
+  "opportunityScore": <number 0-100>,
+  "opportunityReason": "<why this score>",
+  "serpFeatures": ["featured_snippet"],
+  "relatedKeywords": [
+    { "keyword": "...", "volume": null, "difficulty": 42, "relevance": "high" }
+  ],
+  "contentAngle": "<specific content idea>"
+}
+
+Rules:
+- Use only the provided data.
+- If search volume or CPC is unavailable, keep it null in your reasoning and do not invent it.
+- Keep reasons concrete and reference trend, competition, and SERP composition.
+- Return valid JSON only.`;
 
   try {
-    // Prefer Anthropic (fast Haiku), fall back to Gemini
     let raw = null;
-    if (anthropic.isAvailable) raw = await withTimeout(anthropic.generate(prompt, { maxTokens: 400 }), 8000);
-    if (!raw && gemini.isAvailable) raw = await withTimeout(gemini._generate(prompt), 8000);
+    if (anthropic.isAvailable) raw = await withTimeout(anthropic.generate(prompt, { maxTokens: 900, temperature: 0.3 }), 9000).catch(() => null);
+    if (!raw && gemini.isAvailable) raw = await withTimeout(gemini.generate(prompt, { maxTokens: 900, temperature: 0.3 }), 9000).catch(() => null);
     if (!raw) return null;
     return anthropic.parseJSON(raw);
   } catch {
@@ -123,43 +156,72 @@ Return ONLY valid JSON (no markdown):
   }
 }
 
-// ── Public API ────────────────────────────────────────────────────────────────
-
 async function research(q) {
-  // Run all free sources in parallel
-  const [googleSuggs, ddgSuggs, trendsData] = await Promise.allSettled([
+  const [googleSuggs, ddgSuggs, trendsData, serpSnapshot] = await Promise.allSettled([
     googleAutocomplete(q),
     ddgSuggest(q),
     googleTrends(q),
+    serpIntelligence.getKeywordSnapshot(q),
   ]);
 
   const gSuggs = googleSuggs.status === 'fulfilled' ? googleSuggs.value : [];
-  const dSuggs = ddgSuggs.status   === 'fulfilled' ? ddgSuggs.value   : [];
+  const dSuggs = ddgSuggs.status === 'fulfilled' ? ddgSuggs.value : [];
   const trends = trendsData.status === 'fulfilled' ? trendsData.value : null;
+  const serp = serpSnapshot.status === 'fulfilled' ? serpSnapshot.value : null;
 
-  // Deduplicate + merge suggestions
-  const allSugg = [...new Set([...gSuggs, ...dSuggs])].filter(s => s !== q);
+  const mergedKeywords = [...new Set([
+    ...gSuggs,
+    ...dSuggs,
+    ...((serp?.relatedSearches) || []),
+    ...((serp?.relatedQuestions) || []),
+  ])]
+    .filter((item) => item && item.toLowerCase() !== q.toLowerCase())
+    .slice(0, 12);
 
-  // AI analysis on combined data (non-blocking — failure graceful)
-  const insights = await aiInsights(q, allSugg).catch(() => null);
+  const relatedKeywords = mergedKeywords.map((keyword) => ({
+    keyword,
+    searchVolume: null,
+    cpc: null,
+  }));
+
+  const payload = {
+    keyword: q,
+    searchVolume: null,
+    cpc: null,
+    competition: serp?.paidResults?.length ?? null,
+    trendAverage: trends?.averageInterest ?? null,
+    trendDeltaPct: trends?.deltaPct ?? null,
+    serpFeatures: serp?.serpFeatures ?? [],
+    topResults: serp?.organicResults ?? [],
+    relatedKeywords,
+  };
+
+  const insights = await aiInsights(payload);
+  const analysis = insights || buildFallbackAnalysis({
+    keyword: q,
+    trends,
+    serpSnapshot: serp,
+    relatedKeywords,
+  });
 
   return {
-    keyword:      q,
-    suggestions:  allSugg,
-    trends:       trends || { averageInterest: 0, peakInterest: 0, trend: 'unknown', dataPoints: [] },
-    insights:     insights || {
-      difficulty: 'medium',
-      intent:     'commercial',
-      estimatedCpc: 'N/A',
-      targetedAngles: [],
-      negativeKeywords: [],
-      summary: 'AI analysis unavailable',
-    },
+    keyword: q,
+    searchVolume: payload.searchVolume,
+    cpc: payload.cpc,
+    competition: payload.competition,
+    totalResults: serp?.totalResults ?? null,
+    topResults: serp?.organicResults ?? [],
+    relatedQuestions: serp?.relatedQuestions ?? [],
+    relatedSearches: serp?.relatedSearches ?? [],
+    serpFeatures: analysis.serpFeatures || serp?.serpFeatures || [],
+    trends: trends || { averageInterest: 0, peakInterest: 0, trend: 'stable', deltaPct: 0, dataPoints: [] },
+    analysis,
     sources: {
       googleAutocomplete: gSuggs.length > 0,
-      ddgSuggest:         dSuggs.length > 0,
-      googleTrends:       !!trends,
-      aiInsights:         !!insights,
+      ddgSuggest: dSuggs.length > 0,
+      googleTrends: !!trends,
+      valueSerp: !!serp,
+      aiInsights: !!insights,
     },
   };
 }

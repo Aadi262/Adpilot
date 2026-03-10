@@ -227,6 +227,8 @@ export default function BudgetProtectionPage() {
   const scan        = scanData;
   const alertCount  = scan?.alerts?.length ?? 0;
   const status      = scan?.status ?? 'healthy';
+  const summary     = scan?.summary;
+  const anomalies   = scan?.anomalies ?? [];
 
   const statusBanner = status === 'critical'
     ? { bg: 'bg-red-500/10 border-red-500/30', icon: AlertTriangle, iconClass: 'text-red-400', text: `Critical: ${alertCount} campaign${alertCount !== 1 ? 's' : ''} bleeding budget`, textClass: 'text-red-300' }
@@ -270,6 +272,41 @@ export default function BudgetProtectionPage() {
         </div>
       )}
 
+      {summary && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="card">
+            <p className="text-xs text-text-secondary">Daily Spend</p>
+            <p className="text-lg font-bold text-text-primary">${Number(summary.dailySpend || 0).toFixed(2)}</p>
+          </div>
+          <div className="card">
+            <p className="text-xs text-text-secondary">Daily Budget</p>
+            <p className="text-lg font-bold text-text-primary">${Number(summary.dailyBudget || 0).toFixed(2)}</p>
+          </div>
+          <div className="card">
+            <p className="text-xs text-text-secondary">Spend Velocity</p>
+            <p className="text-lg font-bold text-text-primary">{summary.spendVelocity ?? 0}%</p>
+          </div>
+          <div className="card">
+            <p className="text-xs text-text-secondary">Blended CPA</p>
+            <p className="text-lg font-bold text-text-primary">{summary.blendedCpa != null ? `$${summary.blendedCpa}` : '—'}</p>
+          </div>
+        </div>
+      )}
+
+      {anomalies.length > 0 && (
+        <div className="card">
+          <h2 className="text-sm font-semibold text-text-primary mb-3">Detected Anomalies</h2>
+          <div className="space-y-2">
+            {anomalies.map((anomaly, idx) => (
+              <div key={idx} className="text-sm text-text-secondary flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+                {anomaly.message}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── Active Alerts ──────────────────────────────────────────────── */}
       <div>
         <h2 className="text-sm font-semibold text-text-primary mb-3">Active Alerts</h2>
@@ -277,12 +314,22 @@ export default function BudgetProtectionPage() {
           <div className="space-y-3">
             {[...Array(2)].map((_, i) => <div key={i} className="skeleton h-24 rounded-xl" />)}
           </div>
+        ) : (scan?.campaignCount ?? 0) === 0 ? (
+          <div className="card p-0">
+            <EmptyState
+              icon={ShieldAlert}
+              title="No active campaigns to monitor"
+              description="Activate your first campaign to start monitoring spend, CPA, and overspend risk."
+              color="blue"
+              compact
+            />
+          </div>
         ) : (scan?.alerts ?? []).length === 0 ? (
           <div className="card p-0">
             <EmptyState
               icon={CheckCircle2}
               title="All campaigns healthy"
-              description="No budget issues detected. Run a scan or create alert rules below to continuously monitor performance."
+              description="No active budget issues detected. Sentinel is still tracking spend velocity, CPA, and overspend risk."
               color="green"
               compact
             />

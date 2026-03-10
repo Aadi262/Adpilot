@@ -117,9 +117,43 @@ Return ONLY a JSON object: {"summary": "...", "highlight": "best win in one sent
       }
     } catch { /* non-critical */ }
 
+    const technicalScore = seo.length
+      ? Math.round(seo.reduce((sum, audit) => sum + (audit.overallScore || 0), 0) / seo.length)
+      : 0;
+    const contentScore = Math.min(100, Math.round((kws.length / 20) * 100));
+    const keywordCoverage = Math.min(100, Math.round((kws.filter((k) => k.currentRank && k.currentRank <= 20).length / Math.max(kws.length || 1, 1)) * 100));
+    const backlinkProfile = comp.length > 0 ? 45 : 20;
+
+    const actionPlan = [
+      { priority: 'critical', title: 'Fix the highest-impact SEO issues this week', detail: seo[0]?.url ? `Start with ${seo[0].url}` : 'Start with your most recent audited pages' },
+      { priority: 'important', title: 'Refresh weak ad creatives this month', detail: campaignRows.some((c) => c.ctr < 1) ? 'At least one campaign is underperforming on CTR.' : 'Keep creative rotation active to defend CTR.' },
+      { priority: 'nice_to_have', title: 'Expand competitor tracking coverage', detail: comp.length < 3 ? 'Track at least 3 competitors for a stronger benchmark set.' : 'Use tracked competitors in monthly reviews.' },
+    ];
+
     const report = {
       range,
       generatedAt: new Date().toISOString(),
+      executiveSummary: {
+        overview: summary?.summary || `Across the last ${range}, the account generated $${ov.totalRevenue || 0} from $${ov.totalAdSpend || 0} in spend with ${ov.avgROAS || 0}x average ROAS.`,
+        topOpportunities: [
+          kws[0] ? `Improve ranking coverage for "${kws[0].keyword}"` : 'Expand tracked keyword coverage',
+          campaignRows[0] ? `Scale or improve "${campaignRows[0].name}" based on current efficiency` : 'Connect more campaign data for stronger optimization',
+          comp[0] ? `Benchmark against ${comp[0].domain}` : 'Add at least one competitor benchmark',
+        ],
+        topThreats: [
+          alertCount > 0 ? `${alertCount} alerts fired during this range` : 'Alert volume is low, but anomaly coverage should still be monitored',
+          seo[0] ? `Recent SEO score activity centers around ${seo[0].url}` : 'No recent SEO audits were found',
+          kws.length === 0 ? 'No tracked keywords are available for visibility reporting' : 'Keyword coverage still has room to expand',
+        ],
+        recommendedActions: actionPlan.map((item) => item.title),
+      },
+      seoHealthScore: {
+        overall: Math.round((technicalScore + contentScore + keywordCoverage + backlinkProfile) / 4),
+        technicalSeo: technicalScore,
+        contentQuality: contentScore,
+        keywordCoverage,
+        backlinkProfile,
+      },
       overview: {
         totalSpend:      ov.totalAdSpend      || 0,
         totalRevenue:    ov.totalRevenue      || 0,
@@ -132,6 +166,35 @@ Return ONLY a JSON object: {"summary": "...", "highlight": "best win in one sent
         activeCampaigns: ov.activeCampaigns   || 0,
         totalCampaigns:  ov.totalCampaigns    || 0,
       },
+      keywordPerformance: kws.map((k) => ({
+        keyword: k.keyword,
+        volume: k.searchVolume || null,
+        position: k.currentRank ?? null,
+        difficulty: null,
+        opportunity: k.searchVolume ? Math.min(100, Math.round((k.searchVolume / 100) + (k.currentRank ? (100 - k.currentRank) : 20))) : null,
+        trend: k.previousRank && k.currentRank ? (k.currentRank < k.previousRank ? 'rising' : k.currentRank > k.previousRank ? 'falling' : 'stable') : 'stable',
+      })),
+      competitorMatrix: comp.slice(0, 3).map((c) => ({
+        competitor: c.domain || c.name,
+        estimatedTraffic: null,
+        keywordCount: null,
+        topContent: null,
+        adSpend: null,
+      })),
+      contentRecommendations: kws.slice(0, 5).map((k, idx) => ({
+        topic: `Create or refresh content for ${k.keyword}`,
+        targetKeyword: k.keyword,
+        estimatedTrafficPotential: k.searchVolume || null,
+        difficulty: null,
+        priority: idx < 2 ? 'high' : 'medium',
+      })),
+      technicalIssues: seo.map((audit) => ({
+        url: audit.url,
+        score: audit.overallScore,
+        status: audit.status,
+        createdAt: audit.createdAt,
+      })),
+      actionPlan,
       campaigns:       campaignRows,
       keywords:        { rising: risingKws, falling: fallingKws, total: kws.length },
       competitors:     { total: comp.length, domains: comp.map(c => c.domain || c.name) },

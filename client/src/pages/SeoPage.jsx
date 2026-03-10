@@ -1007,11 +1007,44 @@ function BriefDetailModal({ brief, onClose, onDelete }) {
             </div>
           )}
 
+          {brief.peopleAlsoAsk?.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">People Also Ask</p>
+              <div className="space-y-2">
+                {brief.peopleAlsoAsk.map((question, idx) => (
+                  <div key={idx} className="text-sm text-text-secondary bg-bg-primary border border-border rounded-lg px-4 py-3">
+                    {question}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {brief.titleOptions?.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Title Options</p>
+              <div className="space-y-2">
+                {brief.titleOptions.map((title, idx) => (
+                  <div key={idx} className="text-sm text-text-secondary bg-bg-primary border border-border rounded-lg px-4 py-3">
+                    {title}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Competitor angle */}
           {brief.competitorAngle && (
             <div>
               <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">Competitor Angle</p>
               <p className="text-sm text-text-secondary bg-bg-primary border border-border rounded-lg px-4 py-3">{brief.competitorAngle}</p>
+            </div>
+          )}
+
+          {brief.uniqueAngle && (
+            <div>
+              <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1.5">Unique Angle</p>
+              <p className="text-sm text-text-secondary bg-bg-primary border border-border rounded-lg px-4 py-3">{brief.uniqueAngle}</p>
             </div>
           )}
 
