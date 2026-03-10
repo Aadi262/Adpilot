@@ -149,7 +149,18 @@ Frontend: React 18 / Vite / Tailwind / React Query / Zustand / Recharts.
 | VPS verification | ✅ | Live checks passed for keyword research, content briefs, Sentinel scan, ad generation, and report generation on commit `9fd42c7e` |
 
 **Still pending:**
-- Global Session 5 polish is not fully complete yet. Shared skeleton/error/empty states still need one cleanup pass across all remaining surfaces.
+- No major backlog remains from Sessions 2-5. Remaining work is incremental refinement and broader regression testing, not core implementation.
+
+### Session Update — March 10, 2026 (Final Polish Pass)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Sentinel action fix | ✅ | Budget protection "Apply Fix" now calls `/api/v1/budget-ai/apply-fix` instead of the wrong campaign endpoint |
+| Competitor Hijack inline error state | ✅ | Added recoverable inline error card with retry action |
+| SEO Monitors error state | ✅ | Added non-blank fallback card when monitor fetch fails |
+| Global server error wording | ✅ | Backend no longer returns raw "Internal server error" message to users |
+| ErrorBoundary recovery CTA | ✅ | Added "Check Settings" path in the global React error boundary |
+| VPS verification | ✅ | Live Sentinel pause action verified on scanned alert for campaign `Summer Sale — Meta` |
 
 ### Phase C — Complete UI/UX Polish ✅ Complete
 
