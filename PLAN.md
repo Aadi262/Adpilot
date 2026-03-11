@@ -351,7 +351,12 @@ Frontend: React 18 / Vite / Tailwind / React Query / Zustand / Recharts.
 
 **Open verification note:**
 - A local runtime analyzer fetch was blocked because Postgres was not running on `localhost:5432` in the current shell, so this phase is implemented and build-verified locally but not yet deployed to VPS.
-- Next step is commit → push → VPS deploy → live verification on `194.163.146.149:3001` after approval.
+
+**VPS verification:**
+- Phase 7 was deployed live to `194.163.146.149:3001` after commit `43ad857d`.
+- Live health check returned `200 OK` after the rebuild, and app logs show a clean startup path with DB/queue initialization completing normally.
+- Live demo-login verification against `/api/v1/budget-ai/analyzer` returned `200` with `campaigns=4`, `critical=4`, `topActions=6`, and `operatorFeed=8`.
+- The first live campaign dossier (`Summer Sale — Meta`) returned a critical health object, `signals=3`, `actions=4`, and `pacing=overspending`, confirming the new analyzer payload is active on production.
 
 ### Phase C — Complete UI/UX Polish ✅ Complete
 
