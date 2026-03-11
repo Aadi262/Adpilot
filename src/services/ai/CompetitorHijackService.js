@@ -61,7 +61,8 @@ class CompetitorHijackService {
       }
 
       const finalKeywordGaps = this._buildKeywordGaps(mergedKeywords, aiInsights);
-      const aiWinbacks = this._normalizeWinbackOpportunities(aiInsights?.winbackOpportunities);
+      const observedKeywords = mergedKeywords.map((item) => item.keyword).filter(Boolean);
+      const aiWinbacks = this._normalizeWinbackOpportunities(aiInsights?.winbackOpportunities, observedKeywords);
       const counterAdTemplates = this._normalizeCounterAds(aiInsights?.suggestedAds);
 
       const baseResult = {
@@ -174,6 +175,9 @@ class CompetitorHijackService {
     return [
       topKeyword ? `Top visible keyword on-site: "${topKeyword}".` : null,
       secondKeyword ? `Secondary keyword cluster: "${secondKeyword}".` : null,
+      baseResult.topKeywords?.[0]?.position
+        ? `Observed organic rank: "${topKeyword}" at position ${baseResult.topKeywords[0].position} via ${baseResult.topKeywords[0].rankSource || 'search data'}.`
+        : null,
       crawlData.ctas?.[0] ? `Primary CTA observed: "${crawlData.ctas[0]}".` : null,
       crawlData.headings?.[0]?.text ? `Homepage lead headline: "${crawlData.headings[0].text}".` : null,
       crawlData.techStack?.length ? `Detected stack includes ${crawlData.techStack.slice(0, 3).join(', ')}.` : null,
@@ -187,7 +191,7 @@ class CompetitorHijackService {
 
     return topKeywords.map((kw, idx) => {
       const keyword = kw.keyword || kw.word;
-      const position = kw.position ? `SERP position ${kw.position}` : 'no confirmed SERP rank';
+      const position = kw.position ? `SERP position ${kw.position} via ${kw.rankSource || 'search data'}` : 'no confirmed SERP rank';
       const volume = kw.searchVolume ? `${kw.searchVolume}/mo search demand` : 'search volume unavailable';
       const cta = ctas[idx] || ctas[0] || 'Book a demo';
       const serpFeatures = kw.serpFeatures?.length ? `SERP features: ${kw.serpFeatures.join(', ')}` : 'no visible SERP features';
@@ -246,6 +250,7 @@ class CompetitorHijackService {
         frequency: item.frequency ?? null,
         position: enriched.position ?? null,
         searchVolume: enriched.searchVolume ?? null,
+        rankSource: enriched.rankSource ?? null,
         serpFeatures: enriched.serpFeatures ?? [],
         relatedQuestions: enriched.relatedQuestions ?? [],
         relatedSearches: enriched.relatedSearches ?? [],
@@ -271,6 +276,7 @@ class CompetitorHijackService {
       return {
         keyword: keyword.keyword,
         theirRank: keyword.position ?? null,
+        theirRankSource: keyword.rankSource ?? null,
         yourRank: null,
         volume: keyword.searchVolume ?? null,
         opportunity: aiGap.move || aiGap.evidence || evidence || null,
@@ -301,17 +307,24 @@ class CompetitorHijackService {
       .slice(0, 5);
   }
 
-  _normalizeWinbackOpportunities(items) {
+  _normalizeWinbackOpportunities(items, observedKeywords = []) {
     if (!Array.isArray(items)) return [];
+    const keywordSet = new Set(observedKeywords.map((item) => String(item || '').trim().toLowerCase()).filter(Boolean));
     return items
       .map((item) => {
         if (!item?.title || !item?.evidence || !item?.action) return null;
+        const targetKeyword = String(item.targetKeyword || '').trim().toLowerCase();
+        const evidence = String(item.evidence || '').toLowerCase();
+        const matchedKeyword = targetKeyword && keywordSet.has(targetKeyword)
+          ? targetKeyword
+          : [...keywordSet].find((keyword) => evidence.includes(keyword));
+        if (!matchedKeyword) return null;
         return {
           angle: 'Evidence-backed win-back',
           suggestedHeadline: item.title,
           reason: item.evidence,
           action: item.action,
-          targetKeyword: item.targetKeyword || null,
+          targetKeyword: matchedKeyword,
           source: 'anthropic',
         };
       })

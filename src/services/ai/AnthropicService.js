@@ -245,6 +245,7 @@ ONLY return the JSON. No other text.`;
         const bits = [
           `keyword=${keyword}`,
           k.position ? `competitor_rank=${k.position}` : 'competitor_rank=unconfirmed',
+          k.rankSource ? `rank_source=${k.rankSource}` : 'rank_source=unknown',
           k.searchVolume ? `search_volume=${k.searchVolume}` : 'search_volume=unknown',
           Array.isArray(k.serpFeatures) && k.serpFeatures.length ? `serp_features=${k.serpFeatures.join('|')}` : 'serp_features=none',
         ];
@@ -281,6 +282,7 @@ Rules:
 - Use only the observed evidence above. Do not invent ad spend, traffic, search volume, or ranking loss.
 - If evidence is weak for a section, return an empty array for that section.
 - Only return winbackOpportunities if the evidence explicitly supports a recovery or intercept play. Otherwise return [].
+- A valid winback must reference one of the observed keywords above and explain the specific weakness or intercept point.
 - Keep every recommendation concrete and tied to an observed keyword, CTA, heading, or SERP feature.
 
 Return 0-3 items per array. ONLY return the JSON. No other text.`;

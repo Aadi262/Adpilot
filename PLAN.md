@@ -273,6 +273,27 @@ Frontend: React 18 / Vite / Tailwind / React Query / Zustand / Recharts.
 - `npm run build` passed after the provider-layer changes.
 - Forced degraded-state checks confirmed `missing_key` now returns explicit provider metadata instead of silent null behavior.
 
+### Session Update — March 12, 2026 (Phase 4: Fallback Search Evidence Tightening)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| DuckDuckGo SERP fallback for research | ✅ | SEO keyword research and SERP intelligence now fall back to DuckDuckGo HTML result snapshots when ValueSERP is unavailable |
+| Content brief evidence preservation | ✅ | Content briefs now keep using live top-result titles, URLs, snippets, and fetched headings even when the primary SERP API is degraded |
+| Generic brief-outline suppression | ✅ | Brief normalization now drops template headings like “What is …” / “Beginner tips” when real competitor evidence exists and merges AI output with deterministic competitor-derived sections |
+| Competitor rank-source enrichment | ✅ | Competitor keyword enrichment now carries `rankSource` so downstream attack vectors and keyword-gap evidence can distinguish ValueSERP vs DuckDuckGo-backed positions |
+| Win-back grounding filter | ✅ | Competitor win-back opportunities are now discarded unless they map to an observed competitor keyword instead of generic recovery language |
+| Prompt tightening for degraded paths | ✅ | Anthropic prompts for briefs and competitor analysis now explicitly state the search evidence source and require recommendations to stay anchored to observed keywords, CTAs, headings, and fallback data when necessary |
+
+**What this fixes:**
+- The real ValueSERP `402` still has to be solved at the provider/account level, but the app no longer falls back to thin or generic intelligence just because that upstream source is degraded.
+- Content briefs and competitor intelligence now stay evidence-backed using crawlable search data, with stricter suppression of template output.
+
+**Local verification:**
+- Synthetic fallback check confirmed `SerpIntelligenceService` now returns a real fallback snapshot with `primaryStatus=missing_key` and `fallbackStatus=ok`.
+- Brief-outline normalization check confirmed generic sections were removed in favor of competitor-derived headings.
+- Win-back normalization check confirmed generic entries are rejected while keyword-grounded entries still pass.
+- `npm run build` passed after the fallback evidence changes.
+
 ### Phase C — Complete UI/UX Polish ✅ Complete
 
 **Built this session:**

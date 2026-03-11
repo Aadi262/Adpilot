@@ -235,11 +235,12 @@ Return ONLY the JSON object, no markdown, no extra text.`;
   }
 
   async _buildSerpContext(targetKeyword) {
-    const { snapshot, topResults, providerStatus } = await serpIntelligence.getTopResultDetailsWithMeta(targetKeyword, 5);
+    const { snapshot, topResults, providerStatus, fallbackStatus } = await serpIntelligence.getTopResultDetailsWithMeta(targetKeyword, 5);
     if (!snapshot) {
       logger.warn('ContentBriefService: SERP data unavailable — brief will use AI-only context', {
         keyword: targetKeyword,
         providerStatus: providerStatus?.status,
+        fallbackStatus: fallbackStatus?.status,
       });
     }
     return {
@@ -251,6 +252,7 @@ Return ONLY the JSON object, no markdown, no extra text.`;
       serpFeatures: snapshot?.serpFeatures || [],
       totalResults: snapshot?.totalResults || null,
       providerStatus: providerStatus || null,
+      fallbackStatus: fallbackStatus || null,
     };
   }
 
@@ -260,6 +262,11 @@ Return ONLY the JSON object, no markdown, no extra text.`;
 TARGET KEYWORD: "${targetKeyword}"
 SEARCH VOLUME: ${serpContext.searchVolume ?? 'null'}/month
 KEYWORD DIFFICULTY: ${serpContext.difficulty ?? 'null'}/100
+SEARCH EVIDENCE SOURCE: ${serpContext.providerStatus?.status === 'ok' || serpContext.providerStatus?.status === 'degraded_cache'
+  ? `ValueSERP (${serpContext.providerStatus?.status})`
+  : serpContext.fallbackStatus?.status === 'ok'
+    ? 'DuckDuckGo HTML fallback'
+    : 'No live SERP provider data'}
 
 TOP 5 RANKING ARTICLES:
 ${(serpContext.topResults || []).map((r, i) => `${i + 1}. "${r.title}" — ${r.link}
@@ -298,6 +305,7 @@ Rules:
 - Use the competitor headings and PAA questions directly in the planning.
 - Avoid generic sections like "What is ${targetKeyword}?" or "Beginner tips" unless the SERP clearly demands them.
 - Build the outline from the actual ranking pages above. At least 4 outline sections must clearly map to real competitor headings or question clusters.
+- If the search evidence source is a fallback, stay conservative and rely even more heavily on the actual headings above instead of inventing missing SERP features.
 - Make the title options meaningfully different from each other: one practical, one comparison-driven, one decision-making or commercial.
 - Related keywords must be semantically relevant to the SERP context above, not generic SEO filler.
 - Unique angle must name a specific coverage gap from the ranking pages above.
@@ -451,11 +459,14 @@ Rules:
   }
 
   _normalizeOutline(outline, keyword, serpContext) {
+    const deterministicSections = this._buildDeterministicSerpOutline(keyword, serpContext, []);
+    const hasCompetitorEvidence = (serpContext.topResults || []).length > 0;
+
     if (!Array.isArray(outline) || !outline.length) {
-      return this._buildDeterministicSerpOutline(keyword, serpContext, []);
+      return deterministicSections;
     }
 
-    return outline
+    const normalized = outline
       .filter((section) => section && typeof section.heading === 'string')
       .map((section) => ({
         heading: section.heading.trim(),
@@ -464,7 +475,45 @@ Rules:
           : [],
       }))
       .filter((section) => section.heading)
-      .slice(0, 10);
+      .filter((section) => !this._isTemplateHeading(section.heading, keyword, hasCompetitorEvidence));
+
+    if (!normalized.length) {
+      return deterministicSections;
+    }
+
+    const merged = [];
+    const seen = new Set();
+
+    for (const section of [...deterministicSections, ...normalized]) {
+      const key = section.heading.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(section);
+      if (merged.length >= 10) break;
+    }
+
+    return merged;
+  }
+
+  _isTemplateHeading(heading, keyword, hasCompetitorEvidence = false) {
+    const lower = String(heading || '').trim().toLowerCase();
+    if (!lower) return true;
+
+    if (lower === keyword.toLowerCase()) return true;
+    if (lower.startsWith('introduction')) return true;
+    if (lower.startsWith('conclusion')) return true;
+    if (lower === 'faqs' || lower === 'faq') return true;
+
+    if (!hasCompetitorEvidence) return false;
+
+    return (
+      lower.startsWith('what is ') ||
+      lower.startsWith('what are ') ||
+      lower.includes('for beginners') ||
+      lower.includes('beginner') ||
+      lower.includes('basics of ') ||
+      lower.includes('define ')
+    );
   }
 
   _normalizeCompetitorHeadlines(raw, topResults = []) {

@@ -4,6 +4,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const logger = require('../../config/logger');
 const serpProvider = require('./SerpProviderService');
+const googleScraper = require('../keywords/GoogleScraper');
 
 class SerpIntelligenceService {
   get isAvailable() {
@@ -47,6 +48,52 @@ class SerpIntelligenceService {
     };
   }
 
+  _toDuckDuckGoSnapshot(results = []) {
+    return {
+      organicResults: results.slice(0, 10).map((r) => ({
+        position: r.position,
+        title: r.title,
+        link: r.url,
+        domain: this._extractDomain(r.url),
+        snippet: r.snippet || '',
+      })),
+      relatedQuestions: [],
+      relatedSearches: [],
+      paidResults: [],
+      totalResults: null,
+      serpFeatures: [],
+    };
+  }
+
+  async _getDuckDuckGoSnapshot(keyword) {
+    const fallback = await googleScraper.search(keyword, { limit: 10 });
+    if (!fallback.isReal || !fallback.results.length) {
+      return {
+        snapshot: null,
+        fallbackStatus: {
+          provider: 'duckduckgo',
+          configured: true,
+          status: 'unavailable',
+          degraded: true,
+          source: 'fallback',
+          message: 'DuckDuckGo fallback could not provide organic search results.',
+        },
+      };
+    }
+
+    return {
+      snapshot: this._toDuckDuckGoSnapshot(fallback.results),
+      fallbackStatus: {
+        provider: 'duckduckgo',
+        configured: true,
+        status: 'ok',
+        degraded: false,
+        source: fallback.source,
+        message: 'DuckDuckGo HTML results are being used as the live SERP fallback.',
+      },
+    };
+  }
+
   async getKeywordSnapshot(keyword) {
     const result = await this.getKeywordSnapshotWithMeta(keyword);
     return result.snapshot;
@@ -54,9 +101,19 @@ class SerpIntelligenceService {
 
   async getKeywordSnapshotWithMeta(keyword) {
     const result = await this.searchWithMeta(keyword, { num: 10 });
+    let snapshot = this._toKeywordSnapshot(result.data);
+    let fallbackStatus = null;
+
+    if (!snapshot) {
+      const fallback = await this._getDuckDuckGoSnapshot(keyword);
+      snapshot = fallback.snapshot;
+      fallbackStatus = fallback.fallbackStatus;
+    }
+
     return {
-      snapshot: this._toKeywordSnapshot(result.data),
+      snapshot,
       providerStatus: result.providerStatus,
+      fallbackStatus,
       cached: result.cached,
     };
   }
@@ -70,7 +127,7 @@ class SerpIntelligenceService {
   }
 
   async getTopResultDetailsWithMeta(keyword, limit = 5) {
-    const { snapshot, providerStatus, cached } = await this.getKeywordSnapshotWithMeta(keyword);
+    const { snapshot, providerStatus, fallbackStatus, cached } = await this.getKeywordSnapshotWithMeta(keyword);
     const topResults = (snapshot?.organicResults || []).slice(0, limit);
 
     const details = await Promise.all(topResults.map((result) => this._fetchPageDetails(result)));
@@ -78,6 +135,7 @@ class SerpIntelligenceService {
       snapshot,
       topResults: details.filter(Boolean),
       providerStatus,
+      fallbackStatus,
       cached,
     };
   }
@@ -91,6 +149,7 @@ class SerpIntelligenceService {
     const seen = new Set();
     const output = [];
     let providerStatus = null;
+    let fallbackStatus = null;
 
     for (const rawKeyword of keywords) {
       const keyword = typeof rawKeyword === 'string'
@@ -103,6 +162,7 @@ class SerpIntelligenceService {
       const result = await this.getKeywordSnapshotWithMeta(clean);
       const snapshot = result.snapshot;
       providerStatus = providerStatus || result.providerStatus;
+      fallbackStatus = fallbackStatus || result.fallbackStatus;
       const rankingMatch = domain
         ? (snapshot?.organicResults || []).find((result) => this._matchesDomain(result.domain || result.link, domain))
         : null;
@@ -112,6 +172,7 @@ class SerpIntelligenceService {
         cpc: null,
         competition: snapshot?.paidResults?.length ?? null,
         position: rankingMatch?.position ?? null,
+        rankSource: rankingMatch ? (result.fallbackStatus?.status === 'ok' ? 'ddg' : 'valueserp') : null,
         serpFeatures: snapshot?.serpFeatures ?? [],
         relatedQuestions: snapshot?.relatedQuestions ?? [],
         relatedSearches: snapshot?.relatedSearches ?? [],
@@ -122,6 +183,7 @@ class SerpIntelligenceService {
     return {
       keywords: output,
       providerStatus,
+      fallbackStatus,
     };
   }
 
@@ -185,6 +247,17 @@ class SerpIntelligenceService {
       return host === target || host.endsWith(`.${target}`);
     } catch {
       return false;
+    }
+  }
+
+  _extractDomain(candidate) {
+    if (!candidate) return null;
+    try {
+      return candidate.includes('://')
+        ? new URL(candidate).hostname.toLowerCase().replace(/^www\./, '')
+        : String(candidate).toLowerCase().replace(/^www\./, '').split('/')[0];
+    } catch {
+      return null;
     }
   }
 }

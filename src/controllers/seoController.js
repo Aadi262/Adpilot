@@ -610,7 +610,7 @@ exports.researchKeyword = async (req, res, next) => {
     const i = data.analysis || {};
     const sourceLabels = Object.entries(data.sources || {})
       .filter(([, v]) => v)
-      .map(([k]) => ({ googleAutocomplete: 'Google Autocomplete', ddgSuggest: 'DuckDuckGo', googleTrends: 'Google Trends', valueSerp: 'ValueSERP', aiInsights: 'AI Insights' }[k] || k))
+      .map(([k]) => ({ googleAutocomplete: 'Google Autocomplete', ddgSuggest: 'DuckDuckGo Suggest', ddgSerp: 'DuckDuckGo SERP', googleTrends: 'Google Trends', valueSerp: 'ValueSERP', aiInsights: 'AI Insights' }[k] || k))
       .join(' + ') || 'Google Autocomplete';
 
     const normalized = {

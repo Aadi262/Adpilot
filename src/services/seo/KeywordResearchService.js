@@ -185,10 +185,12 @@ async function research(q, { teamId } = {}) {
           source: 'service',
           message: 'SERP enrichment failed before a provider response was returned.',
         },
+        fallbackStatus: null,
         cached: false,
       };
   const serp = serpResult.snapshot;
   const valueSerpAvailable = !!serp && ['ok', 'degraded_cache'].includes(serpResult.providerStatus?.status);
+  const ddgSerpAvailable = !!serp && serpResult.fallbackStatus?.status === 'ok';
 
   const mergedKeywords = [...new Set([
     ...gSuggs,
@@ -240,10 +242,12 @@ async function research(q, { teamId } = {}) {
     analysis,
     providerStatus: {
       valueSerp: serpResult.providerStatus || null,
+      organicFallback: serpResult.fallbackStatus || null,
     },
     sources: {
       googleAutocomplete: gSuggs.length > 0,
       ddgSuggest: dSuggs.length > 0,
+      ddgSerp: ddgSerpAvailable,
       googleTrends: !!trends,
       valueSerp: valueSerpAvailable,
       aiInsights: !!insights,

@@ -18,6 +18,21 @@ const logger  = require('../../config/logger');
  * No API key required. No sign-up required. Completely free.
  */
 class GoogleScraper {
+  async search(keyword, { limit = 10 } = {}) {
+    try {
+      const html = await this._fetchDDG(keyword);
+      if (!html) return { results: [], isReal: false, source: 'ddg' };
+
+      return {
+        results: this._parseResults(html).slice(0, limit),
+        isReal: true,
+        source: 'ddg',
+      };
+    } catch (err) {
+      logger.warn('GoogleScraper.search failed', { keyword, error: err.message });
+      return { results: [], isReal: false, source: 'ddg' };
+    }
+  }
 
   /**
    * Get the rank of a domain for a given keyword.
@@ -29,10 +44,8 @@ class GoogleScraper {
    */
   async getRank(keyword, targetDomain) {
     try {
-      const html = await this._fetchDDG(keyword);
-      if (!html) return { position: null, url: null, title: null, isReal: false, source: 'ddg' };
-
-      const results = this._parseResults(html);
+      const { results, isReal } = await this.search(keyword, { limit: 30 });
+      if (!isReal) return { position: null, url: null, title: null, isReal: false, source: 'ddg' };
       const clean   = this._normalizeDomain(targetDomain);
 
       const match = results.find(r => this._normalizeDomain(r.url).includes(clean));
@@ -90,23 +103,35 @@ class GoogleScraper {
     const results = [];
     let position  = 1;
 
-    // DuckDuckGo HTML lite: results are in .result__a links
     $('a.result__a').each((_, el) => {
       const href  = $(el).attr('href') || '';
       const title = $(el).text().trim();
+      const snippet = $(el)
+        .closest('.result')
+        .find('.result__snippet')
+        .first()
+        .text()
+        .replace(/\s+/g, ' ')
+        .trim();
 
       if (href && !href.startsWith('//duckduckgo') && !href.includes('duckduckgo.com')) {
-        results.push({ position, url: href, title });
+        results.push({ position, url: href, title, snippet });
         position++;
       }
     });
 
-    // Fallback: try .result__url spans which contain the display URL
     if (results.length === 0) {
       $('span.result__url').each((i, el) => {
         const displayUrl = $(el).text().trim();
         if (displayUrl) {
-          results.push({ position: i + 1, url: displayUrl, title: displayUrl });
+          const snippet = $(el)
+            .closest('.result')
+            .find('.result__snippet')
+            .first()
+            .text()
+            .replace(/\s+/g, ' ')
+            .trim();
+          results.push({ position: i + 1, url: displayUrl, title: displayUrl, snippet });
         }
       });
     }
