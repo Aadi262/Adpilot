@@ -328,6 +328,11 @@ Frontend: React 18 / Vite / Tailwind / React Query / Zustand / Recharts.
 - Module-load checks passed for the new repository/orchestrator/research services and updated research controller.
 - `npm run build` passed after the Research Hub dossier and UI updates.
 
+**VPS verification:**
+- Phase 6 was deployed live to `194.163.146.149:3001` after commit `5a435e11`.
+- Live Market Research run for `https://example.com` returned the new dossier fields, including `sourceMatrix`, `evidenceLog`, `dataGaps`, `siteSurfaces`, and `companySnapshot`.
+- This confirms the Research Hub dossier layer is not only implemented locally; it is running on production now.
+
 ### Phase C — Complete UI/UX Polish ✅ Complete
 
 **Built this session:**
