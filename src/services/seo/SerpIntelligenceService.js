@@ -81,7 +81,7 @@ class SerpIntelligenceService {
     };
   }
 
-  async enrichKeywordList(keywords = []) {
+  async enrichKeywordList(keywords = [], domain = null) {
     const seen = new Set();
     const output = [];
 
@@ -94,11 +94,15 @@ class SerpIntelligenceService {
       seen.add(clean);
 
       const snapshot = await this.getKeywordSnapshot(clean);
+      const rankingMatch = domain
+        ? (snapshot?.organicResults || []).find((result) => this._matchesDomain(result.domain || result.link, domain))
+        : null;
       output.push({
         keyword: clean,
         searchVolume: null,
         cpc: null,
         competition: snapshot?.paidResults?.length ?? null,
+        position: rankingMatch?.position ?? null,
         serpFeatures: snapshot?.serpFeatures ?? [],
         relatedQuestions: snapshot?.relatedQuestions ?? [],
         relatedSearches: snapshot?.relatedSearches ?? [],
@@ -156,6 +160,20 @@ class SerpIntelligenceService {
     if (Array.isArray(data.local_results) && data.local_results.length) features.add('local_pack');
     if (Array.isArray(data.shopping_results) && data.shopping_results.length) features.add('shopping');
     return [...features];
+  }
+
+  _matchesDomain(candidate, domain) {
+    if (!candidate || !domain) return false;
+
+    try {
+      const target = String(domain).replace(/^https?:\/\//i, '').replace(/^www\./i, '').split('/')[0].toLowerCase();
+      const host = candidate.includes('://')
+        ? new URL(candidate).hostname.toLowerCase().replace(/^www\./, '')
+        : String(candidate).toLowerCase().replace(/^www\./, '');
+      return host === target || host.endsWith(`.${target}`);
+    } catch {
+      return false;
+    }
   }
 }
 

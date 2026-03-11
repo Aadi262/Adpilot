@@ -160,28 +160,54 @@ ONLY return the JSON. No other text.`;
     return this.parseJSON(raw);
   }
 
-  async analyzeCompetitor({ domain, title, description, ctas, topKeywords, techStack, headings }) {
+  async analyzeCompetitor({ domain, title, description, ctas, topKeywords, techStack, headings, researchBasis, teamMemory }) {
     const headingList = (headings || []).slice(0, 5).map(h => h.text).join(', ');
-    const prompt = `Analyze this competitor website and provide strategic insights.
+    const keywordLines = (topKeywords || [])
+      .slice(0, 8)
+      .map((k) => {
+        const keyword = k.keyword || k.word || 'n/a';
+        const bits = [
+          `keyword=${keyword}`,
+          k.position ? `competitor_rank=${k.position}` : 'competitor_rank=unconfirmed',
+          k.searchVolume ? `search_volume=${k.searchVolume}` : 'search_volume=unknown',
+          Array.isArray(k.serpFeatures) && k.serpFeatures.length ? `serp_features=${k.serpFeatures.join('|')}` : 'serp_features=none',
+        ];
+        return `- ${bits.join(', ')}`;
+      })
+      .join('\n');
+
+    const prompt = `Analyze this competitor website and provide evidence-backed strategic insights.
 
 Competitor: ${domain}
 Title: ${title || 'N/A'}
 Description: ${description || 'N/A'}
 Main Headings: ${headingList || 'N/A'}
 CTAs: ${(ctas || []).join(', ') || 'N/A'}
-Top Keywords: ${(topKeywords || []).map(k => k.word || k).slice(0, 12).join(', ')}
+Top Keywords:
+${keywordLines || '- none'}
 Tech Stack: ${(techStack || []).join(', ') || 'N/A'}
+Observed Research Basis:
+${(researchBasis || []).join('\n') || '- none'}
+${teamMemory ? `\n${teamMemory}\n` : ''}
 
 Return ONLY a valid JSON object, no markdown:
 {
-  "keywordGaps": [{"keyword": "string", "opportunity": "brief note", "difficulty": "low"}],
-  "messagingAngles": ["angle 1", "angle 2", "angle 3"],
-  "weaknesses": ["weakness 1", "weakness 2", "weakness 3"],
-  "strengths": ["strength 1", "strength 2"],
-  "suggestedAds": [{"headline": "string", "body": "string", "angle": "string"}]
+  "keywordGaps": [{"keyword": "string", "evidence": "specific observed evidence", "difficulty": "low|medium|high|null", "move": "specific action"}],
+  "messagingAngles": [{"angle": "string", "evidence": "specific observed evidence", "counterPositioning": "how to beat it"}],
+  "weaknesses": [{"issue": "string", "evidence": "specific observed evidence", "impact": "why it matters"}],
+  "strengths": [{"issue": "string", "evidence": "specific observed evidence"}],
+  "winbackOpportunities": [{"title": "string", "evidence": "specific evidence of lost or weak coverage", "action": "specific action", "targetKeyword": "string|null"}],
+  "suggestedAds": [{"headline": "max 30 chars", "body": "max 90 chars", "angle": "string", "evidence": "specific observed evidence", "cta": "string", "targetAudience": "string"}],
+  "dataGapNotes": ["missing data that prevents stronger conclusions"]
 }
 
-Return 3-5 items per array. ONLY return the JSON. No other text.`;
+Rules:
+- Use only the observed evidence above. Do not invent ad spend, traffic, search volume, or ranking loss.
+- If evidence is weak for a section, return an empty array for that section.
+- Only return winbackOpportunities if the evidence explicitly supports a recovery or intercept play. Otherwise return [].
+- Keep every recommendation concrete and tied to an observed keyword, CTA, heading, or SERP feature.
+
+Return 0-3 items per array. ONLY return the JSON. No other text.`;
 
     const raw = await this.generate(prompt, { temperature: 0.7, maxTokens: 800 });
     return this.parseJSON(raw);

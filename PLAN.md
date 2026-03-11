@@ -162,6 +162,50 @@ Frontend: React 18 / Vite / Tailwind / React Query / Zustand / Recharts.
 | ErrorBoundary recovery CTA | ✅ | Added "Check Settings" path in the global React error boundary |
 | VPS verification | ✅ | Live Sentinel pause action verified on scanned alert for campaign `Summer Sale — Meta` |
 
+### Session Update — March 11, 2026 (Content Brief Runtime Verification)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Content brief schema sync root cause | ✅ | Local runtime verified against synced Prisma schema; the prior `P2022` brief failure was caused by missing `content_briefs` columns in environments that had not applied the newer schema |
+| Content brief legacy-schema tolerance | ✅ | `ContentBriefService` now falls back safely when rich brief columns are unavailable instead of crashing on list/save |
+| Local brief list verification | ✅ | Authenticated `GET /api/v1/seo/briefs` returned `200` with saved brief data |
+| Local brief creation verification | ✅ | Authenticated `POST /api/v1/seo/briefs` returned `201` and created a new brief with `source=anthropic` |
+| Local dev runtime | ✅ | Backend confirmed healthy on `http://localhost:3000`; frontend dev server confirmed on `http://localhost:5173` |
+
+**Notes:**
+- Prisma schema is already in sync locally after verification with `npx prisma db push`.
+- Any environment that still throws content-brief `P2022` errors must apply the same schema sync to its database before the rich brief fields can persist natively.
+
+### Session Update — March 11, 2026 (Launch-Hardening: SEO + Ad Intelligence)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| SEO audit URL determinism | ✅ | Audit creation now canonicalizes URLs and reuses the latest audit for the same site by default instead of creating drift between `example.com`, `https://example.com/`, `www`, and trailing-slash variants |
+| Explicit force-rerun flow | ✅ | Normal audit requests now prefer deterministic reuse; the UI rerun action now uses `?force=1` for a genuinely fresh crawl |
+| Ad Intelligence provider cleanup | ✅ | Competitor analysis now uses Anthropic as the grounded AI layer for strategy output instead of multi-provider templated fallbacks |
+| Fake win-back removal | ✅ | Win-back opportunities are now empty unless there is evidence-backed recovery context; UI shows a clear no-evidence note instead of generic filler |
+| Competitor crawl fallback removal | ✅ | Research no longer returns mock/template competitor output when crawl data is unavailable; it now fails honestly so the marketer is not misled |
+| SERP enrichment improvement | ✅ | Keyword enrichment now attempts to detect the competitor’s live position in SERP results for observed keywords |
+
+**Launch lens:**
+- `LAUNCH.md` makes Budget Protection the core story. Every supporting feature should reduce marketer vigilance and uncertainty, not add generic AI text.
+- The app should prefer real evidence, explicit data gaps, and stable repeatable results over “always say something” behavior.
+
+### Session Update — March 11, 2026 (Team-Memory RAG Layer)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Shared team-memory retrieval layer | ✅ | Added `TeamContextService` to retrieve recent tracked keywords, briefs, audits, competitor research, and report context from Postgres for prompt grounding |
+| Content Brief grounding | ✅ | Anthropic brief generation now includes team memory so briefs align with existing tracked topics, prior briefs, and recent audits instead of repeating generic structures |
+| Keyword Research grounding | ✅ | Anthropic keyword insights now incorporate team memory and use a team-scoped cache key instead of cross-team generic cache reuse |
+| Competitor analysis grounding | ✅ | Anthropic attack-plan generation now receives stored competitor history, tracked keyword overlap, prior research, and recent briefs as retrieval context |
+| Report grounding | ✅ | Executive report summary now includes team memory from recent audits, research, briefs, and tracked keywords |
+| Runtime verification | ✅ | Local verification passed for keyword research (`200`), content brief generation (`201`, `source=anthropic`), and report generation (`200`, structured executive summary + markdown present) |
+
+**Design principle:**
+- “Train Anthropic” in this product means retrieval-augmented generation with the team’s own data, not model fine-tuning.
+- The live system should get sharper over time because the team memory gets richer, while outputs remain grounded in first-party data and current crawl/SERP evidence.
+
 ### Phase C — Complete UI/UX Polish ✅ Complete
 
 **Built this session:**

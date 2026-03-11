@@ -9,6 +9,7 @@ const gemini      = require('../ai/GeminiService');
 const ollama      = require('../ai/OllamaService');
 const huggingface = require('../ai/HuggingFaceService');
 const anthropic   = require('../ai/AnthropicService');
+const teamContextService = require('../ai/TeamContextService');
 const serpIntelligence = require('./SerpIntelligenceService');
 
 const TfIdf     = natural.TfIdf;
@@ -37,16 +38,12 @@ class ContentBriefService {
     if (!targetKeyword?.trim()) throw AppError.badRequest('targetKeyword is required');
 
     const serpContext = await this._buildSerpContext(targetKeyword);
+    const teamContext = await teamContextService.getKeywordContext(teamId, targetKeyword);
     let aiResult = null;
 
     // 1. Anthropic Claude (preferred because current VPS env is working here)
     if (!aiResult && anthropic.isAvailable) {
-      aiResult = await this._generateWithAnthropic(teamId, targetKeyword, serpContext);
-    }
-
-    // 2. Gemini (secondary AI path if Anthropic is unavailable)
-    if (!aiResult && gemini.isAvailable) {
-      aiResult = await this._generateWithGemini(teamId, targetKeyword, serpContext);
+      aiResult = await this._generateWithAnthropic(teamId, targetKeyword, serpContext, teamContext);
     }
 
     if (aiResult) {
@@ -153,13 +150,14 @@ Return ONLY the JSON object, no markdown, no extra text.`;
   /**
    * Generate brief via Gemini (free tier fallback when OpenAI is absent).
    */
-  async _generateWithGemini(teamId, targetKeyword, serpContext) {
+  async _generateWithGemini(teamId, targetKeyword, serpContext, teamContext) {
     try {
       const result = await this._generateSerpBackedBrief(
         targetKeyword,
         await this._collectRelatedKeywords(teamId, serpContext),
         serpContext,
-        'gemini'
+        'gemini',
+        teamContext
       );
       if (!result || !result.title || !Array.isArray(result.outline)) return null;
       if (!SEARCH_INTENTS.includes(result.searchIntent)) result.searchIntent = 'informational';
@@ -173,13 +171,14 @@ Return ONLY the JSON object, no markdown, no extra text.`;
   /**
    * Generate brief via Anthropic Claude (reliable paid-key fallback).
    */
-  async _generateWithAnthropic(teamId, targetKeyword, serpContext) {
+  async _generateWithAnthropic(teamId, targetKeyword, serpContext, teamContext) {
     try {
       const result = await this._generateSerpBackedBrief(
         targetKeyword,
         await this._collectRelatedKeywords(teamId, serpContext),
         serpContext,
-        'anthropic'
+        'anthropic',
+        teamContext
       );
       if (!result || !result.title || !Array.isArray(result.outline)) return null;
       if (!SEARCH_INTENTS.includes(result.searchIntent)) result.searchIntent = 'informational';
@@ -237,6 +236,9 @@ Return ONLY the JSON object, no markdown, no extra text.`;
 
   async _buildSerpContext(targetKeyword) {
     const { snapshot, topResults } = await serpIntelligence.getTopResultDetails(targetKeyword, 5);
+    if (!snapshot) {
+      logger.warn('ContentBriefService: SERP data unavailable — brief will use AI-only context');
+    }
     return {
       searchVolume: null,
       difficulty: null,
@@ -248,7 +250,7 @@ Return ONLY the JSON object, no markdown, no extra text.`;
     };
   }
 
-  async _generateSerpBackedBrief(targetKeyword, relatedKeywords, serpContext, provider) {
+  async _generateSerpBackedBrief(targetKeyword, relatedKeywords, serpContext, provider, teamContext) {
     const prompt = `You are a content strategist creating a brief for a writer.
 
 TARGET KEYWORD: "${targetKeyword}"
@@ -265,6 +267,11 @@ ${(serpContext.peopleAlsoAsk || []).join('\n') || 'n/a'}
 
 RELATED SEARCHES:
 ${(serpContext.relatedSearches || []).join(', ') || relatedKeywords.join(', ')}
+
+SERP FEATURES PRESENT:
+${(serpContext.serpFeatures || []).join(', ') || 'none'}
+
+${teamContextService.formatKeywordContext(teamContext)}
 
 Generate a JSON object with these exact fields:
 {
@@ -290,6 +297,7 @@ Rules:
 - Make the title options meaningfully different from each other: one practical, one comparison-driven, one decision-making or commercial.
 - Related keywords must be semantically relevant to the SERP context above, not generic SEO filler.
 - Unique angle must name a specific coverage gap from the ranking pages above.
+- Respect the team memory above so the brief does not duplicate tracked keywords, prior briefs, or existing strategic angles unless there is a clear reason.
 - Return valid JSON only.`;
 
     let raw = null;
@@ -347,30 +355,58 @@ Rules:
   }
 
   async _saveBrief(teamId, targetKeyword, briefData, serpContext) {
-    const brief = await prisma.contentBrief.create({
-      data: {
-        teamId,
-        targetKeyword,
-        title: briefData.title,
-        metaDescription: briefData.metaDescription || null,
-        targetWordCount: briefData.targetWordCount || null,
-        searchIntent: briefData.searchIntent || null,
-        outline: briefData.outline || [],
-        relatedKeywords: briefData.relatedKeywords || [],
-        peopleAlsoAsk: briefData.peopleAlsoAsk || [],
-        titleOptions: briefData.titleOptions || [],
-        competitorAngle: briefData.competitorAngle || null,
-        uniqueAngle: briefData.uniqueAngle || null,
-        callToAction: briefData.callToAction || null,
-        entities: briefData.entities || [],
-        competitorHeadlines: briefData.competitorHeadlines || [],
-        source: briefData._source || 'fallback',
-        status: 'draft',
-      },
-    });
+    let brief;
+    try {
+      brief = await prisma.contentBrief.create({
+        data: {
+          teamId,
+          targetKeyword,
+          title: briefData.title,
+          metaDescription: briefData.metaDescription || null,
+          targetWordCount: briefData.targetWordCount || null,
+          searchIntent: briefData.searchIntent || null,
+          outline: briefData.outline || [],
+          relatedKeywords: briefData.relatedKeywords || [],
+          peopleAlsoAsk: briefData.peopleAlsoAsk || [],
+          titleOptions: briefData.titleOptions || [],
+          competitorAngle: briefData.competitorAngle || null,
+          uniqueAngle: briefData.uniqueAngle || null,
+          callToAction: briefData.callToAction || null,
+          entities: briefData.entities || [],
+          competitorHeadlines: briefData.competitorHeadlines || [],
+          source: briefData._source || 'fallback',
+          status: 'draft',
+        },
+      });
+    } catch (err) {
+      if (!this._isLegacySchemaError(err)) throw err;
+
+      logger.warn('ContentBriefService: falling back to legacy content_briefs schema', { err: err.message });
+      brief = await prisma.contentBrief.create({
+        data: {
+          teamId,
+          targetKeyword,
+          title: briefData.title,
+          outline: briefData.outline || [],
+          relatedKeywords: briefData.relatedKeywords || [],
+          status: 'draft',
+        },
+      });
+    }
 
     return {
       ...brief,
+      metaDescription: brief.metaDescription ?? briefData.metaDescription ?? null,
+      targetWordCount: brief.targetWordCount ?? briefData.targetWordCount ?? null,
+      searchIntent: brief.searchIntent ?? briefData.searchIntent ?? null,
+      peopleAlsoAsk: brief.peopleAlsoAsk ?? briefData.peopleAlsoAsk ?? [],
+      titleOptions: brief.titleOptions ?? briefData.titleOptions ?? [],
+      competitorAngle: brief.competitorAngle ?? briefData.competitorAngle ?? null,
+      uniqueAngle: brief.uniqueAngle ?? briefData.uniqueAngle ?? null,
+      callToAction: brief.callToAction ?? briefData.callToAction ?? null,
+      entities: brief.entities ?? briefData.entities ?? [],
+      competitorHeadlines: brief.competitorHeadlines ?? briefData.competitorHeadlines ?? [],
+      source: brief.source ?? briefData._source ?? 'fallback',
       serpContext,
       semanticTerms: briefData.semanticTerms || [],
       relatedKeywordsEnriched: briefData.relatedKeywordsEnriched || [],
@@ -638,11 +674,54 @@ Rules:
 
   async getBriefs(teamId, { page = 1, limit = 10 } = {}) {
     const skip = (page - 1) * limit;
-    const [items, total] = await Promise.all([
-      prisma.contentBrief.findMany({ where: { teamId }, orderBy: { createdAt: 'desc' }, skip, take: limit }),
-      prisma.contentBrief.count({ where: { teamId } }),
-    ]);
-    return { items, total };
+    let items;
+    let total;
+
+    try {
+      [items, total] = await Promise.all([
+        prisma.contentBrief.findMany({ where: { teamId }, orderBy: { createdAt: 'desc' }, skip, take: limit }),
+        prisma.contentBrief.count({ where: { teamId } }),
+      ]);
+    } catch (err) {
+      if (!this._isLegacySchemaError(err)) throw err;
+
+      logger.warn('ContentBriefService: reading briefs with legacy schema fallback', { err: err.message });
+      [items, total] = await Promise.all([
+        prisma.contentBrief.findMany({
+          where: { teamId },
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: limit,
+          select: {
+            id: true,
+            teamId: true,
+            targetKeyword: true,
+            title: true,
+            outline: true,
+            relatedKeywords: true,
+            status: true,
+            createdAt: true,
+          },
+        }),
+        prisma.contentBrief.count({ where: { teamId } }),
+      ]);
+    }
+
+    const normalizedItems = items.map((item) => ({
+      ...item,
+      metaDescription: item.metaDescription ?? null,
+      targetWordCount: item.targetWordCount ?? null,
+      searchIntent: item.searchIntent ?? 'informational',
+      peopleAlsoAsk: item.peopleAlsoAsk ?? [],
+      titleOptions: item.titleOptions ?? [],
+      competitorAngle: item.competitorAngle ?? null,
+      uniqueAngle: item.uniqueAngle ?? null,
+      callToAction: item.callToAction ?? null,
+      entities: item.entities ?? [],
+      competitorHeadlines: item.competitorHeadlines ?? [],
+      source: item.source ?? 'fallback',
+    }));
+    return { items: normalizedItems, total };
   }
 
   /**
@@ -652,6 +731,12 @@ Rules:
     const brief = await prisma.contentBrief.findFirst({ where: { id, teamId }, select: { id: true } });
     if (!brief) throw AppError.notFound('Brief');
     await prisma.contentBrief.delete({ where: { id } });
+  }
+
+  _isLegacySchemaError(err) {
+    return err?.name === 'PrismaClientKnownRequestError' ||
+      /content_briefs/i.test(err?.message || '') ||
+      /meta_description|target_word_count|search_intent|people_also_ask|title_options|competitor_angle|unique_angle|call_to_action|entities|competitor_headlines|source/i.test(err?.message || '');
   }
 }
 

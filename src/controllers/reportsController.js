@@ -6,6 +6,7 @@ const { success } = require('../common/response');
 const aggregator  = require('../services/analytics/AnalyticsAggregator');
 const anthropic   = require('../services/ai/AnthropicService');
 const gemini      = require('../services/ai/GeminiService');
+const teamContextService = require('../services/ai/TeamContextService');
 const { withTimeout } = require('../utils/timeout');
 const { isKeywordUsable } = require('../utils/keywordQuality');
 
@@ -28,6 +29,7 @@ exports.generate = async (req, res, next) => {
     if (cached) return success(res, { ...cached, cached: true });
 
     const since = rangeToDate(range);
+    const reportContext = await teamContextService.getReportContext(teamId);
 
     // Parallel data fetch
     const [overview, campaigns, keywords, competitors, seoAudits, alerts] =
@@ -190,6 +192,7 @@ Return ONLY a JSON object: {"summary": "...", "highlight": "best win in one sent
     const topThreats = buildTopThreats({ alertCount, seo, campaignRows, keywordPerformance });
     const actionPlan = buildActionPlan({ technicalIssues, campaignRows, keywordPerformance, comp, seo });
     const executiveSummary = await buildExecutiveSummary({
+      teamMemory: teamContextService.formatReportContext(reportContext),
       range,
       overview: ov,
       alertCount,
@@ -376,6 +379,7 @@ function buildActionPlan({ technicalIssues, campaignRows, keywordPerformance, co
 }
 
 async function buildExecutiveSummary({
+  teamMemory,
   range,
   overview,
   alertCount,
@@ -426,6 +430,8 @@ ${actionPlan.map((item) => `- [${item.priority}] ${item.title}: ${item.detail}`)
 Top keywords:
 ${keywordPerformance.slice(0, 5).map((row) => `- ${row.keyword}: position=${row.position ?? 'n/a'}, volume=${row.volume ?? 'n/a'}, opportunity=${row.opportunity ?? 'n/a'}, trend=${row.trend}`).join('\n')}
 
+${teamMemory || 'TEAM MEMORY:\n- none'}
+
 Return JSON only:
 {
   "overview": "2-3 sentence plain-English summary",
@@ -438,7 +444,6 @@ Return JSON only:
   try {
     let raw = null;
     if (anthropic.isAvailable) raw = await withTimeout(anthropic.generate(prompt), 7000).catch(() => null);
-    if (!raw && gemini.isAvailable) raw = await withTimeout(gemini.generate(prompt), 7000).catch(() => null);
     if (!raw) return deterministic;
     const cleaned = raw.replace(/```json?\s*/gi, '').replace(/```/g, '').trim();
     const parsed = JSON.parse(cleaned);

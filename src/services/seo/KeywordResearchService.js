@@ -4,6 +4,7 @@ const axios = require('axios');
 const logger = require('../../config/logger');
 const anthropic = require('../ai/AnthropicService');
 const gemini = require('../ai/GeminiService');
+const teamContextService = require('../ai/TeamContextService');
 const serpIntelligence = require('./SerpIntelligenceService');
 const { withTimeout } = require('../../utils/timeout');
 
@@ -108,7 +109,7 @@ function buildFallbackAnalysis({ keyword, trends, serpSnapshot, relatedKeywords 
   };
 }
 
-async function aiInsights(payload) {
+async function aiInsights(payload, teamContext) {
   const prompt = `You are an SEO analyst. Given this keyword data from search APIs:
 - Keyword: "${payload.keyword}"
 - Search Volume: ${payload.searchVolume ?? 'null'}
@@ -120,6 +121,8 @@ async function aiInsights(payload) {
 - Top ranking pages:
 ${(payload.topResults || []).slice(0, 5).map((r, i) => `${i + 1}. ${r.title} | ${r.domain || r.link}`).join('\n')}
 - Related terms: ${(payload.relatedKeywords || []).map((r) => r.keyword).join(', ')}
+
+${teamContextService.formatKeywordContext(teamContext)}
 
 Provide analysis in this EXACT JSON format:
 {
@@ -143,12 +146,12 @@ Rules:
 - Use only the provided data.
 - If search volume or CPC is unavailable, keep it null in your reasoning and do not invent it.
 - Keep reasons concrete and reference trend, competition, and SERP composition.
+- Use the team memory above to avoid repeating stale priorities and to connect this keyword to what the team already tracks.
 - Return valid JSON only.`;
 
   try {
     let raw = null;
     if (anthropic.isAvailable) raw = await withTimeout(anthropic.generate(prompt, { maxTokens: 900, temperature: 0.3 }), 9000).catch(() => null);
-    if (!raw && gemini.isAvailable) raw = await withTimeout(gemini.generate(prompt, { maxTokens: 900, temperature: 0.3 }), 9000).catch(() => null);
     if (!raw) return null;
     return anthropic.parseJSON(raw);
   } catch {
@@ -156,7 +159,7 @@ Rules:
   }
 }
 
-async function research(q) {
+async function research(q, { teamId } = {}) {
   const [googleSuggs, ddgSuggs, trendsData, serpSnapshot] = await Promise.allSettled([
     googleAutocomplete(q),
     ddgSuggest(q),
@@ -196,7 +199,8 @@ async function research(q) {
     relatedKeywords,
   };
 
-  const insights = await aiInsights(payload);
+  const teamContext = teamId ? await teamContextService.getKeywordContext(teamId, q) : null;
+  const insights = await aiInsights(payload, teamContext || { matchedKeywords: [], matchedBriefs: [], recentAudits: [], relatedResearch: [] });
   const analysis = insights || buildFallbackAnalysis({
     keyword: q,
     trends,

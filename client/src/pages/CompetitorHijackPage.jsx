@@ -251,9 +251,9 @@ export default function CompetitorHijackPage() {
             <div className="card">
               <div className="flex items-center gap-2 mb-1">
                 <Target className="w-4 h-4 text-accent-purple" />
-                <p className="text-xs text-text-secondary font-medium">Opportunities</p>
+                <p className="text-xs text-text-secondary font-medium">Actionable Moves</p>
               </div>
-              <p className="text-xl font-bold text-text-primary">{result.winbackOpportunities?.length ?? 0}</p>
+              <p className="text-xl font-bold text-text-primary">{(result.attackVectors?.length ?? 0) + (result.winbackOpportunities?.length ?? 0)}</p>
             </div>
           </div>
 
@@ -389,9 +389,9 @@ export default function CompetitorHijackPage() {
           )}
 
           {/* Win-back Opportunities */}
-          {result.winbackOpportunities?.length > 0 && (
-            <div>
-              <h2 className="text-sm font-semibold text-text-primary mb-3">Win-back Opportunities</h2>
+          <div>
+            <h2 className="text-sm font-semibold text-text-primary mb-3">Win-back Opportunities</h2>
+            {result.winbackOpportunities?.length > 0 ? (
               <div className="space-y-3">
                 {result.winbackOpportunities.map((opp, i) => (
                   <div key={i} className="card space-y-2">
@@ -402,13 +402,18 @@ export default function CompetitorHijackPage() {
                         </span>
                         <p className="text-sm font-semibold text-text-primary mt-2">{opp.suggestedHeadline}</p>
                         <p className="text-xs text-text-secondary mt-1 leading-relaxed">{opp.reason}</p>
+                        {opp.action && <p className="text-xs text-accent-blue mt-1">Move: {opp.action}</p>}
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="card text-xs text-text-secondary leading-relaxed">
+                {result.winbackUnavailableReason || 'No evidence-backed win-back opportunity is available yet. This section stays empty until the analysis has real recovery evidence.'}
+              </div>
+            )}
+          </div>
 
           {result.counterAdTemplates?.length > 0 && (
             <div>

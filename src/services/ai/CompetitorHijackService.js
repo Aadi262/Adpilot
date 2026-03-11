@@ -1,11 +1,10 @@
 'use strict';
 
 const logger             = require('../../config/logger');
+const AppError           = require('../../common/AppError');
 const CompetitorAnalyzer = require('./CompetitorAnalyzer');
-const gemini             = require('./GeminiService');
-const ollama             = require('./OllamaService');
-const huggingface        = require('./HuggingFaceService');
 const anthropic          = require('./AnthropicService');
+const teamContextService = require('./TeamContextService');
 const serpIntelligence   = require('../seo/SerpIntelligenceService');
 
 class CompetitorHijackService {
@@ -28,77 +27,41 @@ class CompetitorHijackService {
     try {
       crawlData = await CompetitorAnalyzer.analyze(cleanDomain);
     } catch (err) {
-      logger.warn('CompetitorHijackService: crawl failed, using mock fallback', {
+      logger.warn('CompetitorHijackService: crawl failed', {
         domain: cleanDomain,
         error:  err.message,
       });
     }
 
-    // If crawl succeeded, optionally enrich with AI insights (Ollama → Gemini)
+    if (!crawlData) {
+      throw AppError.serviceUnavailable('Could not crawl this competitor site. Live ad intelligence needs a crawlable page, so no fallback template was returned.');
+    }
+
     if (crawlData) {
       let aiInsights = null;
-      const enrichedKeywords = await serpIntelligence.enrichKeywordList((crawlData.topKeywords || []).slice(0, 8));
+      const teamContext = await teamContextService.getCompetitorContext(teamId, cleanDomain);
+      const enrichedKeywords = await serpIntelligence.enrichKeywordList((crawlData.topKeywords || []).slice(0, 8), cleanDomain);
+      const mergedKeywords = this._mergeKeywordEvidence(crawlData.topKeywords || [], enrichedKeywords);
+      const researchBasis = this._buildResearchBasis({ topKeywords: mergedKeywords }, crawlData);
       const aiParams = {
         domain:      crawlData.domain,
         title:       crawlData.title,
         description: crawlData.description,
         ctas:        crawlData.ctas,
-        topKeywords: enrichedKeywords.length ? enrichedKeywords : crawlData.topKeywords,
+        topKeywords: mergedKeywords,
         techStack:   crawlData.techStack,
         headings:    crawlData.headings,
+        researchBasis,
+        teamMemory:  teamContextService.formatCompetitorContext(teamContext),
       };
 
-      // 1. Try Ollama (local, free)
-      if (await ollama.isAvailable()) {
-        aiInsights = await ollama.analyzeCompetitor(aiParams);
-      }
-      // 2. Try Gemini (free key)
-      if (!aiInsights && gemini.isAvailable) {
-        aiInsights = await gemini.analyzeCompetitor(aiParams);
-      }
-
-      // 3. Try HuggingFace (free key, Mistral-7B)
-      if (!aiInsights && huggingface.isAvailable) {
-        aiInsights = await huggingface.analyzeCompetitor(aiParams);
-      }
-
-      // 4. Try Anthropic Claude (paid key, reliable)
-      if (!aiInsights && anthropic.isAvailable) {
+      if (anthropic.isAvailable) {
         aiInsights = await anthropic.analyzeCompetitor(aiParams);
       }
 
-      // Build keyword gaps from crawl data (real keywords found on their site)
-      const keywordGaps = (crawlData.topKeywords || []).slice(0, 5).map((kw, i) => ({
-        keyword:   kw.word,
-        theirRank: i + 1, // they rank for these (found prominently on their site)
-        yourRank:  null,  // we don't know without SERP data
-        volume:    null,  // we don't know without SEMrush/SERP data
-        source:    'crawl',
-      }));
-
-      // Use Gemini keyword gaps if available (richer data)
-      const finalKeywordGaps = aiInsights?.keywordGaps
-        ? aiInsights.keywordGaps.map(g => ({
-            keyword:    g.keyword,
-            theirRank:  1,
-            yourRank:   null,
-            volume:     null,
-            opportunity: g.opportunity,
-            difficulty:  g.difficulty,
-            source:      'ai',
-          }))
-        : keywordGaps;
-
-      // Build ad examples from Gemini suggested ads or heading-based mock
-      const adExamples = aiInsights?.suggestedAds
-        ? aiInsights.suggestedAds.map((ad, i) => ({
-            headline:    ad.headline,
-            description: ad.body,
-            cta:         crawlData.ctas?.[0] || 'Learn More',
-            platform:    i % 2 === 0 ? 'Google' : 'Meta',
-            source:      'ai',
-          }))
-        : this._buildAdExamplesFromCrawl(crawlData);
+      const finalKeywordGaps = this._buildKeywordGaps(mergedKeywords, aiInsights);
+      const aiWinbacks = this._normalizeWinbackOpportunities(aiInsights?.winbackOpportunities);
+      const counterAdTemplates = this._normalizeCounterAds(aiInsights?.suggestedAds);
 
       const baseResult = {
         domain:            crawlData.domain,
@@ -107,7 +70,7 @@ class CompetitorHijackService {
         description:       crawlData.description,
         headings:          crawlData.headings,
         ctas:              crawlData.ctas,
-        topKeywords:       enrichedKeywords.length ? enrichedKeywords : crawlData.topKeywords,
+        topKeywords:       mergedKeywords,
         techStack:         crawlData.techStack,
         linkCount:         crawlData.linkCount,
         hasAnalytics:      crawlData.hasAnalytics,
@@ -118,12 +81,19 @@ class CompetitorHijackService {
         adSpend:           null,
         adSpendNote:       crawlData.adSpendNote,
         // Results
-        adExamples,
+        adExamples: [],
         keywordGaps:       finalKeywordGaps,
-        messagingAngles:   aiInsights?.messagingAngles || this._buildAnglesFromCrawl(crawlData),
-        weaknesses:        aiInsights?.weaknesses || null,
-        strengths:         aiInsights?.strengths || null,
-        winbackOpportunities: this._buildWinbackFromData(crawlData, aiInsights),
+        messagingAngles:   this._normalizeMessagingAngles(aiInsights?.messagingAngles),
+        weaknesses:        this._normalizeEvidenceList(aiInsights?.weaknesses, 'issue'),
+        strengths:         this._normalizeEvidenceList(aiInsights?.strengths, 'issue'),
+        winbackOpportunities: aiWinbacks,
+        winbackUnavailableReason: aiWinbacks.length
+          ? null
+          : 'No evidence-backed win-back opportunity was found. This analysis has live crawl + SERP snapshot data, but not historical rank-loss data.',
+        counterAdTemplates,
+        counterAdUnavailableReason: counterAdTemplates.length
+          ? null
+          : 'Counter-ad templates were not generated because Anthropic did not return evidence-backed creative recommendations.',
         // Data quality flags
         isReal:     true,
         hasAiInsights: !!aiInsights,
@@ -135,11 +105,7 @@ class CompetitorHijackService {
         : this._buildAttackResult(baseResult, crawlData, aiInsights);
     }
 
-    // Full fallback: smart mock (deterministic, honest label)
-    const fallback = this._mockFallback(cleanDomain);
-    return mode === 'overview'
-      ? this._buildOverviewResult(fallback, fallback, null)
-      : this._buildAttackResult(fallback, fallback, null);
+    throw AppError.serviceUnavailable('Could not analyze this competitor because no live crawl data was available.');
   }
 
   _buildOverviewResult(baseResult, crawlData, aiInsights) {
@@ -168,8 +134,8 @@ class CompetitorHijackService {
         contentTypes: this._detectContentTypes(crawlData),
         topics: topKeywords.slice(0, 8),
       },
-      strengths: baseResult.strengths || this._buildOverviewStrengths(crawlData),
-      weaknesses: baseResult.weaknesses || this._buildOverviewWeaknesses(crawlData),
+      strengths: baseResult.strengths?.length ? baseResult.strengths : this._buildOverviewStrengths(crawlData),
+      weaknesses: baseResult.weaknesses?.length ? baseResult.weaknesses : this._buildOverviewWeaknesses(crawlData),
       topKeywords,
       adExamples: [],
       keywordGaps: [],
@@ -178,7 +144,7 @@ class CompetitorHijackService {
   }
 
   _buildAttackResult(baseResult, crawlData, aiInsights) {
-    const researchBasis = this._buildResearchBasis(baseResult, crawlData);
+    const researchBasis = baseResult.researchBasis || this._buildResearchBasis(baseResult, crawlData);
     const attackVectors = this._buildAttackVectors(baseResult, crawlData, aiInsights);
 
     return {
@@ -190,11 +156,7 @@ class CompetitorHijackService {
         page: h.text,
         reason: idx === 0 ? 'Weak differentiation in headline copy' : 'Likely low CTR due to generic positioning',
       })),
-      counterAdTemplates: (baseResult.adExamples || []).slice(0, 3).map((ad, idx) => ({
-        angle: ['Relevance', 'Unique value', 'Stronger CTA'][idx] || 'Counter-positioning',
-        headline: `${(ad.headline || baseResult.domain).slice(0, 28)}`.trim(),
-        description: (ad.description || `Choose an alternative to ${baseResult.domain} with clearer ROI and faster setup.`).slice(0, 88),
-      })),
+      counterAdTemplates: baseResult.counterAdTemplates || [],
       timingInsights: baseResult.hasAiInsights
         ? ['Paid competition exists on this SERP, indicating active budget pressure.', 'Monitor this keyword weekly for new ad copy changes.']
         : ['Live spend timing data is unavailable without ad network transparency APIs.'],
@@ -216,16 +178,17 @@ class CompetitorHijackService {
   _buildAttackVectors(baseResult, crawlData, aiInsights) {
     const topKeywords = (baseResult.topKeywords || []).slice(0, 3);
     const ctas = crawlData.ctas || [];
-    const weaknesses = aiInsights?.weaknesses || [];
+    const weaknesses = this._normalizeEvidenceList(aiInsights?.weaknesses, 'issue');
 
     return topKeywords.map((kw, idx) => {
       const keyword = kw.keyword || kw.word;
       const position = kw.position ? `SERP position ${kw.position}` : 'no confirmed SERP rank';
       const volume = kw.searchVolume ? `${kw.searchVolume}/mo search demand` : 'search volume unavailable';
       const cta = ctas[idx] || ctas[0] || 'Book a demo';
+      const serpFeatures = kw.serpFeatures?.length ? `SERP features: ${kw.serpFeatures.join(', ')}` : 'no visible SERP features';
       return {
         title: `Capture ${keyword} demand`,
-        evidence: `Observed keyword "${keyword}" with ${position}; ${volume}. Their conversion path leans on "${cta}".`,
+        evidence: `Observed keyword "${keyword}" with ${position}; ${volume}; ${serpFeatures}. Their conversion path leans on "${cta}".`,
         move: weaknesses[idx]
           ? `Build a counter-landing page for "${keyword}" and address this exact weakness: ${weaknesses[idx]}`
           : `Build a dedicated landing page and paid ad group around "${keyword}" with a stronger proof point than "${cta}".`,
@@ -268,116 +231,105 @@ class CompetitorHijackService {
     return weaknesses;
   }
 
-  _buildAdExamplesFromCrawl(crawl) {
-    const name  = crawl.title?.split(/[-|–]/)[0]?.trim() || crawl.domain;
-    const ctas  = crawl.ctas?.slice(0, 3) || ['Learn More'];
-    const h1    = crawl.headings?.find(h => h.tag === 'H1')?.text || name;
-
-    return [
-      { headline: h1.substring(0, 40),                                platform: 'Google', cta: ctas[0] || 'Learn More',      source: 'crawl' },
-      { headline: `${name} — ${crawl.ctas?.[0] || 'Try for Free'}`.substring(0, 40), platform: 'Meta',   cta: ctas[1] || 'Get Started',    source: 'crawl' },
-      { headline: `${name} — See How It Works`.substring(0, 40),     platform: 'Google', cta: ctas[2] || 'Watch Demo',       source: 'crawl' },
-    ];
+  _mergeKeywordEvidence(crawlKeywords, enrichedKeywords) {
+    const enrichedMap = new Map((enrichedKeywords || []).map((item) => [item.keyword, item]));
+    return (crawlKeywords || []).slice(0, 10).map((item) => {
+      const keyword = String(item.word || item.keyword || '').trim().toLowerCase();
+      const enriched = enrichedMap.get(keyword) || {};
+      return {
+        keyword,
+        frequency: item.frequency ?? null,
+        position: enriched.position ?? null,
+        searchVolume: enriched.searchVolume ?? null,
+        serpFeatures: enriched.serpFeatures ?? [],
+        relatedQuestions: enriched.relatedQuestions ?? [],
+        relatedSearches: enriched.relatedSearches ?? [],
+        totalResults: enriched.totalResults ?? null,
+      };
+    }).filter((item) => item.keyword);
   }
 
-  _buildAnglesFromCrawl(crawl) {
-    const angles = [];
-    if (crawl.hasFacebookPixel)  angles.push('Retargeting-heavy');
-    if (crawl.hasAnalytics)      angles.push('Data-driven');
-    if (crawl.ctas?.some(c => /free/i.test(c)))    angles.push('Free trial / freemium');
-    if (crawl.ctas?.some(c => /demo/i.test(c)))    angles.push('Demo-led sales');
-    if (crawl.ctas?.some(c => /pricing/i.test(c))) angles.push('Pricing-forward');
-    if (angles.length === 0) angles.push('Feature-focused', 'Trust & credibility', 'ROI-driven');
-    return angles.slice(0, 5);
+  _buildKeywordGaps(topKeywords, aiInsights) {
+    const aiGapMap = new Map(
+      (Array.isArray(aiInsights?.keywordGaps) ? aiInsights.keywordGaps : [])
+        .map((gap) => [String(gap.keyword || '').trim().toLowerCase(), gap])
+        .filter(([keyword]) => keyword)
+    );
+
+    return (topKeywords || []).slice(0, 5).map((keyword) => {
+      const aiGap = aiGapMap.get(keyword.keyword) || {};
+      const evidence = [
+        keyword.position ? `competitor ranks #${keyword.position}` : 'competitor rank unconfirmed',
+        keyword.serpFeatures?.length ? `SERP features: ${keyword.serpFeatures.join(', ')}` : null,
+      ].filter(Boolean).join('; ');
+
+      return {
+        keyword: keyword.keyword,
+        theirRank: keyword.position ?? null,
+        yourRank: null,
+        volume: keyword.searchVolume ?? null,
+        opportunity: aiGap.move || aiGap.evidence || evidence || null,
+        difficulty: aiGap.difficulty || null,
+        source: aiGap.move || aiGap.evidence ? 'anthropic' : 'crawl',
+      };
+    });
   }
 
-  _buildWinbackFromData(crawl, aiInsights) {
-    const primaryKeyword = crawl.topKeywords?.[0]?.keyword || crawl.topKeywords?.[0]?.word || null;
-    const secondaryKeyword = crawl.topKeywords?.[1]?.keyword || crawl.topKeywords?.[1]?.word || null;
-    const primaryCta = crawl.ctas?.[0] || 'Book a demo';
-    const secondaryCta = crawl.ctas?.[1] || 'Start free trial';
-    const headlineAnchor = crawl.headings?.[0]?.text?.substring(0, 72) || crawl.title || crawl.domain;
-    const weaknesses = aiInsights?.weaknesses || [];
-
-    const opportunities = [
-      primaryKeyword ? {
-        angle: 'Keyword Intercept',
-        suggestedHeadline: `Own "${primaryKeyword}" before they do`,
-        reason: `They visibly emphasize "${primaryKeyword}" on-page. Attack the same demand with a tighter page, stronger proof, and a more direct CTA than their current journey.`,
-        action: `Launch a dedicated ${primaryKeyword} comparison page and pair it with exact-match search ads.`,
-        targetKeyword: primaryKeyword,
-        source: weaknesses.length ? 'ai' : 'crawl',
-      } : null,
-      {
-        angle: 'CTA Counter',
-        suggestedHeadline: `Beat their "${primaryCta}" offer`,
-        reason: `Their conversion path leans on "${primaryCta}". Replace that with a lower-friction CTA and an immediate proof element so the value is clearer above the fold.`,
-        action: `Test a direct-response alternative to "${primaryCta}" such as "${secondaryCta}" with proof and urgency near the fold.`,
-        targetKeyword: secondaryKeyword,
-        source: weaknesses.length ? 'ai' : 'crawl',
-      },
-      {
-        angle: 'Messaging Gap',
-        suggestedHeadline: `Turn "${headlineAnchor.substring(0, 38)}" into your angle`,
-        reason: weaknesses[0]
-          ? `Their weakness is clear: ${weaknesses[0]}. Turn that weakness into the lead message and support it with pricing clarity, proof, or faster onboarding.`
-          : `Their current headline focus is "${headlineAnchor}". Reframe the same category promise with a sharper outcome, evidence, and a more specific buyer promise.`,
-        action: `Build one counter-campaign that directly addresses the missing promise in their current positioning.`,
-        targetKeyword: secondaryKeyword || primaryKeyword,
-        source: weaknesses.length ? 'ai' : 'crawl',
-      },
-    ].filter(Boolean);
-
-    return opportunities.slice(0, 3);
+  _normalizeMessagingAngles(items) {
+    if (!Array.isArray(items)) return [];
+    return items
+      .map((item) => typeof item === 'string' ? item : item?.angle)
+      .filter(Boolean)
+      .slice(0, 5);
   }
 
-  /**
-   * Fallback when Puppeteer crawl fails (site blocks bots, timeout, etc.)
-   * Uses deterministic mock — clearly labelled as sample data.
-   */
-  _mockFallback(cleanDomain) {
-    const seed = cleanDomain.split('').reduce((acc, c, i) => acc + c.charCodeAt(0) * (i + 1), 0);
-    const rng  = (min, max) => min + (seed % (max - min + 1));
-    const name = cleanDomain.split('.')[0];
+  _normalizeEvidenceList(items, key) {
+    if (!Array.isArray(items)) return [];
+    return items
+      .map((item) => {
+        if (typeof item === 'string') return item;
+        const label = item?.[key];
+        const evidence = item?.evidence ? ` (${item.evidence})` : '';
+        return label ? `${label}${evidence}` : null;
+      })
+      .filter(Boolean)
+      .slice(0, 5);
+  }
 
-    return {
-      domain:      cleanDomain,
-      url:         `https://${cleanDomain}`,
-      title:       null,
-      description: null,
-      headings:    [],
-      ctas:        [],
-      topKeywords: [
-        { word: `${name} alternative`,  frequency: 12 },
-        { word: `${name} pricing`,       frequency: 8  },
-        { word: `best ${name} tool`,     frequency: 6  },
-        { word: `${name} review`,        frequency: 5  },
-        { word: `${name} features`,      frequency: 4  },
-      ],
-      techStack:        [],
-      estimatedAdSpend: null,
-      adSpend:          null,
-      adSpendNote:      'Real ad spend data requires SEMrush or SpyFu API ($39–119/mo)',
-      adExamples: [
-        { headline: `${name} — Free Trial`,               description: `Join thousands using ${name}.`, cta: 'Start Free Trial', platform: 'Google', source: 'mock' },
-        { headline: `#1 ${name} Platform`,                description: `Trusted by industry leaders.`,   cta: 'Get Started',     platform: 'Meta',   source: 'mock' },
-        { headline: `Try ${name} Today`,                   description: `Real-time insights, 24/7 support.`, cta: 'Learn More', platform: 'Google', source: 'mock' },
-      ],
-      keywordGaps: [
-        { keyword: `${name} alternative`,    theirRank: 1 + (seed % 5),  yourRank: null, volume: 1200 + rng(0, 3800), source: 'mock' },
-        { keyword: `${name} pricing`,         theirRank: 2 + (seed % 4),  yourRank: null, volume: 880  + rng(0, 2100), source: 'mock' },
-        { keyword: `best ${name} tool`,       theirRank: 3 + (seed % 6),  yourRank: null, volume: 650  + rng(0, 1500), source: 'mock' },
-      ],
-      messagingAngles:      ['Price-focused', 'Feature-heavy', 'Trust/testimonials'],
-      winbackOpportunities: [
-        { angle: 'Price Comparison', suggestedHeadline: `Switch from ${name} — Save 40%`, reason: 'Counter with transparency + savings calculator.', source: 'mock' },
-        { angle: 'Feature Gap',      suggestedHeadline: `Everything ${name} does — and more`, reason: 'Highlight capabilities they don\'t mention.', source: 'mock' },
-      ],
-      isReal:        false,
-      hasAiInsights: false,
-      crawlFailed:   true,
-      crawlFailNote: 'Site blocked automated crawling. Showing sample data structure.',
-    };
+  _normalizeWinbackOpportunities(items) {
+    if (!Array.isArray(items)) return [];
+    return items
+      .map((item) => {
+        if (!item?.title || !item?.evidence || !item?.action) return null;
+        return {
+          angle: 'Evidence-backed win-back',
+          suggestedHeadline: item.title,
+          reason: item.evidence,
+          action: item.action,
+          targetKeyword: item.targetKeyword || null,
+          source: 'anthropic',
+        };
+      })
+      .filter(Boolean)
+      .slice(0, 3);
+  }
+
+  _normalizeCounterAds(items) {
+    if (!Array.isArray(items)) return [];
+    return items
+      .map((item) => {
+        if (!item?.headline || !item?.body) return null;
+        return {
+          angle: item.angle || 'Counter-positioning',
+          headline: String(item.headline).slice(0, 30),
+          description: String(item.body).slice(0, 90),
+          evidence: item.evidence || null,
+          cta: item.cta || null,
+          targetAudience: item.targetAudience || null,
+        };
+      })
+      .filter(Boolean)
+      .slice(0, 3);
   }
 }
 

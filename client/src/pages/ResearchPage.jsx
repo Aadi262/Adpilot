@@ -585,8 +585,8 @@ function AdIntelSection() {
                       <p className="text-xs text-text-secondary">Keywords Found</p>
                     </div>
                     <div className="card text-center py-3">
-                      <p className="text-lg font-bold text-text-primary">{savedResult.winbackOpportunities?.length ?? 0}</p>
-                      <p className="text-xs text-text-secondary">Opportunities</p>
+                      <p className="text-lg font-bold text-text-primary">{(savedResult.attackVectors?.length ?? 0) + (savedResult.winbackOpportunities?.length ?? 0)}</p>
+                      <p className="text-xs text-text-secondary">Actionable Moves</p>
                     </div>
                   </div>
 
@@ -618,18 +618,24 @@ function AdIntelSection() {
 
                   <div>
                     <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Win-back Opportunities</h4>
-                    <div className="space-y-2">
-                      {(savedResult.winbackOpportunities ?? []).map((opp, i) => (
-                        <div key={i} className="card space-y-1.5">
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-accent-purple/10 text-accent-purple border border-accent-purple/20 font-medium inline-block">{opp.angle}</span>
-                          <p className="text-sm font-semibold text-text-primary">{opp.suggestedHeadline}</p>
-                          <p className="text-xs text-text-secondary leading-relaxed">{opp.reason}</p>
-                          {opp.action && <p className="text-xs text-accent-blue">Move: {opp.action}</p>}
-                          {opp.targetKeyword && <p className="text-[11px] text-text-secondary">Target keyword: {opp.targetKeyword}</p>}
-                          {opp.source && <p className="text-[11px] text-text-secondary">Source: {opp.source === 'ai' ? 'AI + crawl evidence' : 'crawl evidence'}</p>}
-                        </div>
-                      ))}
-                    </div>
+                    {(savedResult.winbackOpportunities ?? []).length > 0 ? (
+                      <div className="space-y-2">
+                        {(savedResult.winbackOpportunities ?? []).map((opp, i) => (
+                          <div key={i} className="card space-y-1.5">
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-accent-purple/10 text-accent-purple border border-accent-purple/20 font-medium inline-block">{opp.angle}</span>
+                            <p className="text-sm font-semibold text-text-primary">{opp.suggestedHeadline}</p>
+                            <p className="text-xs text-text-secondary leading-relaxed">{opp.reason}</p>
+                            {opp.action && <p className="text-xs text-accent-blue">Move: {opp.action}</p>}
+                            {opp.targetKeyword && <p className="text-[11px] text-text-secondary">Target keyword: {opp.targetKeyword}</p>}
+                            {opp.source && <p className="text-[11px] text-text-secondary">Source: {opp.source === 'anthropic' ? 'Anthropic + live evidence' : opp.source}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="card text-xs text-text-secondary leading-relaxed">
+                        {savedResult.winbackUnavailableReason || 'No evidence-backed win-back opportunity is available yet. This section stays empty until the analysis has real recovery evidence.'}
+                      </div>
+                    )}
                   </div>
 
                   {savedResult.topKeywords?.length > 0 && (

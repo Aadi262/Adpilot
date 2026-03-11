@@ -365,7 +365,7 @@ function AuditResultPanel({ auditId, onClose, onComplete, onRerun }) {
   const [showRerunConfirm, setShowRerunConfirm] = useState(false);
 
   const rerunMutation = useMutation({
-    mutationFn: (data) => api.post('/seo/audit', data),
+    mutationFn: (data) => api.post('/seo/audit?force=1', data),
     onSuccess: (res) => {
       const newId = res.data.data?.auditId;
       queryClient.invalidateQueries({ queryKey: ['seo', 'audits'] });
@@ -1250,6 +1250,9 @@ function AuditsTab({ initialUrl = '', autoRun = false }) {
     mutationFn: (data) => api.post('/seo/audit', data),
     onSuccess:  (res) => {
       const auditId = res.data.data?.auditId;
+      if (res.data.data?.cached) {
+        toast.info(res.data.data?.message || 'Showing the latest completed audit for this site.');
+      }
       queryClient.invalidateQueries({ queryKey: ['seo', 'audits'] });
       setUrl('');
       if (auditId) setSelectedAuditId(auditId); // auto-open result panel

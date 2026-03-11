@@ -13,6 +13,7 @@ const { parsePagination } = require('../common/pagination');
 const AppError            = require('../common/AppError');
 const { ACTIVE_STATUSES } = require('../services/seo/audit/AuditOrchestrator');
 const { getKeywordQualityIssue } = require('../utils/keywordQuality');
+const { normalizeWebsiteUrl, buildWebsiteCacheKey } = require('../utils/urlNormalizer');
 
 // ── SEO Audits ────────────────────────────────────────────────────────────────
 
@@ -32,16 +33,21 @@ exports.triggerAudit = async (req, res, next) => {
   try {
     const { url }   = req.body;
     const { teamId } = req.user;
+    const normalizedUrl = normalizeWebsiteUrl(url);
+    const auditKey = buildWebsiteCacheKey(normalizedUrl);
+    const forceRefresh = ['1', 'true', 'yes'].includes(String(req.query.force || '').toLowerCase());
 
     // ── Duplicate-audit guard ───────────────────────────────────────────────
-    const running = await prisma.seoAudit.findFirst({
+    const runningCandidates = await prisma.seoAudit.findMany({
       where: {
         teamId,
-        url,
         status: { in: ACTIVE_STATUSES },
       },
-      select: { id: true, status: true },
+      orderBy: { createdAt: 'desc' },
+      take: 25,
+      select: { id: true, status: true, url: true },
     });
+    const running = runningCandidates.find((audit) => _safeAuditCacheKey(audit.url) === auditKey);
 
     if (running) {
       throw AppError.conflict(
@@ -51,24 +57,23 @@ exports.triggerAudit = async (req, res, next) => {
     }
 
     // ── 24-hour completed audit cache ───────────────────────────────────────
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const recentAudit = await prisma.seoAudit.findFirst({
+    const completedCandidates = await prisma.seoAudit.findMany({
       where: {
         teamId,
-        url,
-        status:    { in: ['completed', 'complete'] },
-        createdAt: { gte: oneDayAgo },
+        status: { in: ['completed', 'complete'] },
       },
       orderBy: { createdAt: 'desc' },
-      select:  { id: true, createdAt: true },
+      take: 100,
+      select: { id: true, createdAt: true, url: true },
     });
+    const recentAudit = completedCandidates.find((audit) => _safeAuditCacheKey(audit.url) === auditKey);
 
-    if (recentAudit && !req.query.force) {
+    if (recentAudit && !forceRefresh) {
       return success(res, {
         auditId:   recentAudit.id,
         cached:    true,
         cachedAt:  recentAudit.createdAt,
-        message:   'Audit completed within the last 24 hours. Use ?force=1 to re-audit.',
+        message:   'Returning the latest completed audit for this site. Use ?force=1 to run a fresh crawl.',
       });
     }
 
@@ -78,14 +83,14 @@ exports.triggerAudit = async (req, res, next) => {
 const audit = await prisma.seoAudit.create({
   data: {
     teamId,
-    url,
+    url: normalizedUrl,
     status:        'pending',
     engineVersion: featureFlags.seoEngine.v2 ? 2 : 1,  // ← uses flag
   },
 });
 
     const job = await queues.seoAudit.add(
-      { teamId, url, auditId: audit.id, userId: req.user.userId },
+      { teamId, url: normalizedUrl, auditId: audit.id, userId: req.user.userId },
       {
         // Deterministic jobId — prevents double-enqueue on accidental double-submit
         jobId: `audit:${teamId}:${audit.id}`,
@@ -99,6 +104,14 @@ const audit = await prisma.seoAudit.create({
     });
   } catch (err) { next(err); }
 };
+
+function _safeAuditCacheKey(url) {
+  try {
+    return buildWebsiteCacheKey(url);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * GET /api/v1/seo/audit/:id
@@ -585,10 +598,10 @@ exports.researchKeyword = async (req, res, next) => {
       return res.status(400).json({ success: false, error: { message: 'q must be at least 2 characters' } });
     }
 
-    const cacheKey = `kw:research:${q.toLowerCase()}`;
+    const cacheKey = `kw:research:${req.user.teamId}:${q.toLowerCase()}`;
     const { data, cached } = await cache.getOrSet(
       cacheKey,
-      () => keywordResearchService.research(q),
+      () => keywordResearchService.research(q, { teamId: req.user.teamId }),
       60 * 120  // 2-hour cache
     );
 
