@@ -221,6 +221,38 @@ Frontend: React 18 / Vite / Tailwind / React Query / Zustand / Recharts.
 - The biggest source of “same input, different answer” drift was not only the models; it was also the service layer ignoring `temperature` and re-running structured prompts without a cache.
 - Fixing that in one place is better than trying to patch each page separately, and it keeps the codebase closer to SOLID/service-layer design.
 
+### Session Update — March 11, 2026 (Phase 1: Production Data-Layer Lockdown)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Compose file alignment | ✅ | Replaced the stale checked-in compose file with the actual AdPilot production stack (`postgres`, `redis`, `adpilot-app`) so repo infra matches the live VPS deployment |
+| Postgres public exposure removal | ✅ | Removed host-port publishing for Postgres from compose; DB is now intended to stay private to Docker networking only |
+| Redis public exposure removal | ✅ | Removed host-port publishing for Redis as well so the cache layer is no longer reachable from the public internet |
+| Service health gates | ✅ | Added Compose health checks for Postgres and Redis and made the app depend on healthy backing services |
+| Restart policy hardening | ✅ | Added `restart: unless-stopped` across the production services so recovery is automatic after host/container restarts |
+
+**Security note:**
+- VPS logs showed active hostile SQL traffic against the exposed database port. Closing host access to Postgres is a real production security fix, not cleanup.
+- Redis was also being published publicly and is now treated as an internal-only service for the same reason.
+
+### Session Update — March 11, 2026 (Phase 2: Startup Flow Cleanup)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Boot-time schema mutation removed | ✅ | Production Docker startup no longer runs `prisma db push --accept-data-loss` on every container boot |
+| Dedicated DB readiness script | ✅ | Added `src/scripts/waitForDatabase.js` to block startup until Prisma can complete a real DB connection and `SELECT 1` |
+| Startup responsibility separation | ✅ | Schema sync is now treated as an explicit operational step, while container boot is limited to dependency readiness + app start |
+
+**Why this matters:**
+- The previous image startup path mixed deployment/migration concerns with application boot, which is why the container showed the initial Prisma `P1000` noise and non-deterministic recovery behavior.
+- This phase keeps boot predictable and makes DB schema changes a conscious action instead of a side effect of every restart.
+
+**VPS verification:**
+- The real production image definition was the root `Dockerfile`, not `src/Dockerfile`; both are now aligned.
+- Live production logs now show `Database ready after 1 attempt(s)` before server startup.
+- The old boot-time `prisma db push --accept-data-loss` path and initial Prisma `P1000` startup noise are no longer present.
+- Production `/health` returned `200` after the redeploy.
+
 ### Phase C — Complete UI/UX Polish ✅ Complete
 
 **Built this session:**

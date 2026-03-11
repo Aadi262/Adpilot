@@ -74,7 +74,7 @@ COPY package*.json ./
 COPY prisma ./prisma/
 
 # Install backend deps (no devDeps in production)
-# prisma CLI is in dependencies so it is available for generate and db push
+# prisma CLI is in dependencies so it is available for client generation
 RUN npm ci --omit=dev
 
 # Generate Prisma client (uses the CLI installed above)
@@ -91,6 +91,6 @@ ENV PORT=3000
 ENV NODE_ENV=production
 EXPOSE ${PORT}
 
-# Sync schema + start server
-# prisma is in production dependencies so the CLI is available without npx download
-CMD ["sh", "-c", "node_modules/.bin/prisma db push --accept-data-loss && node src/server.js"]
+# Wait for the database socket to accept connections, then start the API.
+# Schema sync is a separate operational step and should not happen during app boot.
+CMD ["sh", "-c", "node src/scripts/waitForDatabase.js && node src/server.js"]
