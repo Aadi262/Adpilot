@@ -1,7 +1,11 @@
 'use strict';
 
+const crypto = require('crypto');
+
 const Anthropic = require('@anthropic-ai/sdk');
 const logger    = require('../../config/logger');
+const { getRedis } = require('../../config/redis');
+const { withTimeout } = require('../../utils/timeout');
 
 /**
  * AnthropicService — Claude-based AI for ad generation, content briefs, competitor analysis.
@@ -30,20 +34,58 @@ class AnthropicService {
     return !!this._client;
   }
 
+  _hash(value) {
+    return crypto.createHash('sha1').update(String(value || '')).digest('hex');
+  }
+
+  _cacheKey(kind, key) {
+    return `anthropic:${kind}:${this._hash(key)}`;
+  }
+
+  async _readCachedJSON(key) {
+    try {
+      const redis = getRedis();
+      const cached = await redis.get(key);
+      return cached ? JSON.parse(cached) : null;
+    } catch (err) {
+      logger.debug('AnthropicService: cache read skipped', { message: err.message });
+      return null;
+    }
+  }
+
+  async _writeCachedJSON(key, value, ttlSeconds) {
+    try {
+      const redis = getRedis();
+      await redis.setex(key, ttlSeconds, JSON.stringify(value));
+    } catch (err) {
+      logger.debug('AnthropicService: cache write skipped', { message: err.message });
+    }
+  }
+
   /**
    * Core generation method — sends a prompt, returns raw text.
    */
   async generate(prompt, opts = {}) {
     if (!this._client) return null;
 
-    const { maxTokens = 1200, temperature = 0.7 } = opts;
+    const {
+      maxTokens = 1200,
+      temperature = 0.2,
+      timeoutMs = 12000,
+      system = null,
+    } = opts;
 
     try {
-      const message = await this._client.messages.create({
-        model:      this.model,
-        max_tokens: maxTokens,
-        messages:   [{ role: 'user', content: prompt }],
-      });
+      const message = await withTimeout(
+        this._client.messages.create({
+          model: this.model,
+          max_tokens: maxTokens,
+          temperature,
+          ...(system ? { system } : {}),
+          messages: [{ role: 'user', content: prompt }],
+        }),
+        timeoutMs
+      );
 
       return message.content
         .filter(b => b.type === 'text')
@@ -61,6 +103,32 @@ class AnthropicService {
       }
       return null;
     }
+  }
+
+  async generateJSON(prompt, opts = {}) {
+    if (!this._client) return null;
+
+    const {
+      cacheKey = prompt,
+      cacheTtlSeconds = 6 * 60 * 60,
+      ...generateOpts
+    } = opts;
+
+    const redisKey = cacheTtlSeconds > 0 ? this._cacheKey('json', cacheKey) : null;
+    if (redisKey) {
+      const cached = await this._readCachedJSON(redisKey);
+      if (cached) return cached;
+    }
+
+    const raw = await this.generate(prompt, generateOpts);
+    const parsed = this.parseJSON(raw);
+    if (!parsed) return null;
+
+    if (redisKey) {
+      await this._writeCachedJSON(redisKey, parsed, cacheTtlSeconds);
+    }
+
+    return parsed;
   }
 
   /**
@@ -131,8 +199,12 @@ Return ONLY a valid JSON array, no markdown:
 Use angles in this order: Social Proof, Problem/Solution, Curiosity, Fear of Missing Out.
 ONLY return the JSON array. No other text.`;
 
-    const raw = await this.generate(prompt, { temperature: 0.85, maxTokens: 1000 });
-    return this.parseJSON(raw);
+    return this.generateJSON(prompt, {
+      temperature: 0.55,
+      maxTokens: 1000,
+      cacheKey: ['ads', product, keyword, targetAudience, platform, tone, campaignObjective].filter(Boolean).join('|'),
+      cacheTtlSeconds: 2 * 60 * 60,
+    });
   }
 
   async generateContentBrief({ keyword, relatedKeywords = [] }) {
@@ -156,8 +228,12 @@ Return ONLY a valid JSON object, no markdown:
 searchIntent must be one of: informational, commercial, transactional, navigational.
 ONLY return the JSON. No other text.`;
 
-    const raw = await this.generate(prompt, { temperature: 0.7, maxTokens: 1000 });
-    return this.parseJSON(raw);
+    return this.generateJSON(prompt, {
+      temperature: 0.2,
+      maxTokens: 1000,
+      cacheKey: ['brief', keyword, ...relatedKeywords].join('|'),
+      cacheTtlSeconds: 12 * 60 * 60,
+    });
   }
 
   async analyzeCompetitor({ domain, title, description, ctas, topKeywords, techStack, headings, researchBasis, teamMemory }) {
@@ -209,8 +285,12 @@ Rules:
 
 Return 0-3 items per array. ONLY return the JSON. No other text.`;
 
-    const raw = await this.generate(prompt, { temperature: 0.7, maxTokens: 800 });
-    return this.parseJSON(raw);
+    return this.generateJSON(prompt, {
+      temperature: 0.15,
+      maxTokens: 800,
+      cacheKey: ['competitor', domain, title, description, keywordLines, headingList, (researchBasis || []).join('|'), teamMemory || ''].join('|'),
+      cacheTtlSeconds: 12 * 60 * 60,
+    });
   }
 }
 

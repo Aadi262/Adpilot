@@ -206,6 +206,21 @@ Frontend: React 18 / Vite / Tailwind / React Query / Zustand / Recharts.
 - “Train Anthropic” in this product means retrieval-augmented generation with the team’s own data, not model fine-tuning.
 - The live system should get sharper over time because the team memory gets richer, while outputs remain grounded in first-party data and current crawl/SERP evidence.
 
+### Session Update — March 11, 2026 (AI Engine Hardening)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Anthropic temperature bug fix | ✅ | `AnthropicService.generate()` now actually forwards the requested `temperature` to the Anthropic API instead of silently using provider defaults |
+| Shared structured-response caching | ✅ | Added Redis-backed `AnthropicService.generateJSON()` so repeated structured prompts reuse the same parsed JSON instead of drifting between calls |
+| Provider-level timeout control | ✅ | Anthropic requests now honor explicit `timeoutMs` values in the shared service rather than relying on each caller to wrap the request correctly |
+| Lower-variance SEO outputs | ✅ | Content briefs, keyword research insights, SEO summaries, report summaries, and dashboard verdicts now use low-temperature structured generation for more stable outputs |
+| Prompt-keyed cache rollout | ✅ | Shared prompt caches now back briefs, keyword research, SEO summaries, reports, and dashboard AI blocks so identical evidence returns the same answer faster |
+| Local build verification | ✅ | `npm run build` and targeted module-load verification passed after the engine-layer changes |
+
+**Why this matters:**
+- The biggest source of “same input, different answer” drift was not only the models; it was also the service layer ignoring `temperature` and re-running structured prompts without a cache.
+- Fixing that in one place is better than trying to patch each page separately, and it keeps the codebase closer to SOLID/service-layer design.
+
 ### Phase C — Complete UI/UX Polish ✅ Complete
 
 **Built this session:**

@@ -171,8 +171,14 @@ Respond ONLY with valid JSON. No markdown, no code blocks, no extra text.`;
       {
         name: 'anthropic',
         enabled: anthropic.isAvailable,
-        request: () => anthropic.generate(prompt, { maxTokens: 1500, temperature: 0.4 }),
-        parse: (raw) => anthropic.parseJSON(raw),
+        request: () => anthropic.generateJSON(prompt, {
+          maxTokens: 1500,
+          temperature: 0.15,
+          timeoutMs: 12000,
+          cacheKey: `seo-summary:${this._summaryCacheKey(prompt)}`,
+          cacheTtlSeconds: 7 * 24 * 60 * 60,
+        }),
+        parse: (raw) => raw,
       },
       {
         name: 'ollama',
@@ -232,6 +238,10 @@ Respond ONLY with valid JSON. No markdown, no code blocks, no extra text.`;
       })),
       businessImpact: String(parsed.businessImpact),
     };
+  }
+
+  _summaryCacheKey(prompt) {
+    return prompt;
   }
 }
 

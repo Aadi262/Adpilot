@@ -122,12 +122,20 @@ Metrics:
 Return ONLY a JSON object: {"summary": "...", "highlight": "best win in one sentence", "warning": "biggest risk in one sentence"}`;
 
     try {
-      let raw = null;
-      if (anthropic.isAvailable) raw = await withTimeout(anthropic.generate(summaryPrompt), 6000).catch(() => null);
-      if (!raw && gemini.isAvailable) raw = await withTimeout(gemini.generate(summaryPrompt), 6000).catch(() => null);
-      if (raw) {
-        const cleaned = raw.replace(/```json?\s*/gi, '').replace(/```/g, '').trim();
-        summary = JSON.parse(cleaned);
+      if (anthropic.isAvailable) {
+        summary = await anthropic.generateJSON(summaryPrompt, {
+          timeoutMs: 6000,
+          temperature: 0.1,
+          cacheKey: `report-overview:${teamId}:${range}:${ov.totalAdSpend || 0}:${ov.totalRevenue || 0}:${alertCount}`,
+          cacheTtlSeconds: 30 * 60,
+        });
+      }
+      if (!summary && gemini.isAvailable) {
+        const raw = await withTimeout(gemini.generate(summaryPrompt), 6000).catch(() => null);
+        if (raw) {
+          const cleaned = raw.replace(/```json?\s*/gi, '').replace(/```/g, '').trim();
+          summary = JSON.parse(cleaned);
+        }
       }
     } catch { /* non-critical */ }
 
@@ -442,11 +450,27 @@ Return JSON only:
 }`;
 
   try {
-    let raw = null;
-    if (anthropic.isAvailable) raw = await withTimeout(anthropic.generate(prompt), 7000).catch(() => null);
-    if (!raw) return deterministic;
-    const cleaned = raw.replace(/```json?\s*/gi, '').replace(/```/g, '').trim();
-    const parsed = JSON.parse(cleaned);
+    let parsed = null;
+    if (anthropic.isAvailable) {
+      parsed = await anthropic.generateJSON(prompt, {
+        timeoutMs: 7000,
+        temperature: 0.1,
+        cacheKey: `report-summary:${range}:${JSON.stringify({
+          health: overview?.health?.score || 0,
+          alerts: alertCount,
+          technicalScore,
+          contentScore,
+          keywordCoverage,
+          backlinkProfile,
+          topOpportunities,
+          topThreats,
+          actionPlan,
+          keywordPerformance: keywordPerformance.slice(0, 5),
+        })}`,
+        cacheTtlSeconds: 30 * 60,
+      });
+    }
+    if (!parsed) return deterministic;
     return {
       overview: parsed.overview || deterministic.overview,
       findings: parsed.findings || deterministic.findings,

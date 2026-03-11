@@ -300,11 +300,20 @@ Rules:
 - Respect the team memory above so the brief does not duplicate tracked keywords, prior briefs, or existing strategic angles unless there is a clear reason.
 - Return valid JSON only.`;
 
-    let raw = null;
-    if (provider === 'anthropic') raw = await anthropic.generate(prompt, { maxTokens: 1400, temperature: 0.35 });
-    if (provider === 'gemini') raw = await gemini.generate(prompt, { maxTokens: 1400, temperature: 0.35 });
+    let parsed = null;
+    if (provider === 'anthropic') {
+      parsed = await anthropic.generateJSON(prompt, {
+        maxTokens: 1400,
+        temperature: 0.15,
+        cacheKey: ['content-brief', targetKeyword, teamContextService.formatKeywordContext(teamContext)].join('|'),
+        cacheTtlSeconds: 12 * 60 * 60,
+      });
+    }
+    if (provider === 'gemini') {
+      const raw = await gemini.generate(prompt, { maxTokens: 1400, temperature: 0.2 });
+      parsed = anthropic.parseJSON(raw);
+    }
 
-    const parsed = anthropic.parseJSON(raw);
     if (!parsed || !parsed.title || !Array.isArray(parsed.outline)) return null;
     return this._normalizeBriefResult(parsed, targetKeyword, relatedKeywords, serpContext, provider);
   }

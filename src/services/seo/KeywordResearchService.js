@@ -150,10 +150,14 @@ Rules:
 - Return valid JSON only.`;
 
   try {
-    let raw = null;
-    if (anthropic.isAvailable) raw = await withTimeout(anthropic.generate(prompt, { maxTokens: 900, temperature: 0.3 }), 9000).catch(() => null);
-    if (!raw) return null;
-    return anthropic.parseJSON(raw);
+    if (!anthropic.isAvailable) return null;
+    return await anthropic.generateJSON(prompt, {
+      maxTokens: 900,
+      temperature: 0.1,
+      timeoutMs: 9000,
+      cacheKey: ['keyword-research', payload.keyword, JSON.stringify(payload), teamContextService.formatKeywordContext(teamContext)].join('|'),
+      cacheTtlSeconds: 6 * 60 * 60,
+    });
   } catch {
     return null;
   }

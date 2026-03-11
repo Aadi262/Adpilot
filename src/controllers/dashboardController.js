@@ -142,18 +142,24 @@ Return ONLY valid JSON array (no markdown):
 }]`;
 
   try {
-    let raw = null;
+    let parsed = null;
     if (anthropic.isAvailable) {
-      raw = await withTimeout(anthropic.generate(prompt), 6000).catch(() => null);
+      parsed = await anthropic.generateJSON(prompt, {
+        timeoutMs: 6000,
+        temperature: 0.15,
+        cacheKey: `dashboard-actions:${context.join('|')}`,
+        cacheTtlSeconds: 15 * 60,
+      });
     }
-    if (!raw && gemini.isAvailable) {
+    if (!parsed && gemini.isAvailable) {
+      let raw = null;
       raw = await withTimeout(gemini.generate(prompt), 6000).catch(() => null);
+      if (raw) {
+        const cleaned = raw.replace(/```json?\s*/gi, '').replace(/```/g, '').trim();
+        parsed = JSON.parse(cleaned);
+      }
     }
-    if (!raw) return FALLBACK_ACTIONS;
-
-    // Strip markdown fences if present
-    const cleaned = raw.replace(/```json?\s*/gi, '').replace(/```/g, '').trim();
-    return JSON.parse(cleaned);
+    return Array.isArray(parsed) && parsed.length ? parsed : FALLBACK_ACTIONS;
   } catch {
     return FALLBACK_ACTIONS;
   }
@@ -251,12 +257,22 @@ Active campaigns: ${activeCampaigns}/${totalCampaigns}
 Return ONLY a JSON object: {"verdict": "...", "topAction": "..."}`;
 
       try {
-        let raw = null;
-        if (anthropic.isAvailable) raw = await withTimeout(anthropic.generate(verdictPrompt), 5000).catch(() => null);
-        if (!raw && gemini.isAvailable) raw = await withTimeout(gemini.generate(verdictPrompt), 5000).catch(() => null);
-        if (raw) {
-          const cleaned = raw.replace(/```json?\s*/gi, '').replace(/```/g, '').trim();
-          aiVerdict = JSON.parse(cleaned);
+        if (anthropic.isAvailable) {
+          aiVerdict = await anthropic.generateJSON(verdictPrompt, {
+            timeoutMs: 5000,
+            temperature: 0.1,
+            cacheKey: `dashboard-verdict:${teamId}:${health.score}:${avgROAS}:${overallCTR}:${overallCPA}:${activeCampaigns}:${totalCampaigns}:${actions.map((a) => a.message).join('|')}`,
+            cacheTtlSeconds: 30 * 60,
+          });
+        }
+        if (!aiVerdict && gemini.isAvailable) {
+          const raw = await withTimeout(gemini.generate(verdictPrompt), 5000).catch(() => null);
+          if (raw) {
+            const cleaned = raw.replace(/```json?\s*/gi, '').replace(/```/g, '').trim();
+            aiVerdict = JSON.parse(cleaned);
+          }
+        }
+        if (aiVerdict) {
           cache.set(verdictKey, aiVerdict, 1800); // 30min
         }
       } catch { /* non-critical */ }
