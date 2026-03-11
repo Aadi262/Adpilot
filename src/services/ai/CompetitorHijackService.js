@@ -75,6 +75,16 @@ class CompetitorHijackService {
         topKeywords:       mergedKeywords,
         techStack:         crawlData.techStack,
         linkCount:         crawlData.linkCount,
+        socialLinks:       crawlData.socialLinks || [],
+        internalLinks:     crawlData.internalLinks || [],
+        siteSurfaces:      crawlData.siteSurfaces || {},
+        contentFootprint:  crawlData.contentFootprint || {},
+        companySnapshot:   crawlData.companySnapshot || {},
+        structuredDataTypes: crawlData.structuredDataTypes || [],
+        robotsTxtPresent:  crawlData.robotsTxtPresent || false,
+        sitemapPresent:    crawlData.sitemapPresent || false,
+        sitemapUrlCount:   crawlData.sitemapUrlCount || 0,
+        crawlCoverage:     crawlData.crawlCoverage || {},
         hasAnalytics:      crawlData.hasAnalytics,
         hasFacebookPixel:  crawlData.hasFacebookPixel,
         hasRetargeting:    crawlData.hasRetargeting,
@@ -100,6 +110,11 @@ class CompetitorHijackService {
         isReal:     true,
         hasAiInsights: !!aiInsights,
         serpProviderStatus: serpEnrichment.providerStatus || null,
+        serpFallbackStatus: serpEnrichment.fallbackStatus || null,
+        sourceMatrix: this._buildSourceMatrix(crawlData, serpEnrichment, aiInsights),
+        evidenceLog: this._buildEvidenceLog(crawlData, mergedKeywords, teamContext),
+        dataGaps: this._buildDataGaps(crawlData, serpEnrichment, aiInsights),
+        ragContext: this._buildRagContext(teamContext),
         crawledAt:  crawlData.crawledAt,
       };
 
@@ -124,13 +139,22 @@ class CompetitorHijackService {
       mode: 'overview',
       trafficEstimate: null,
       threatLevel: this._computeThreatLevel(topKeywords, crawlData),
-      socialLinks: [],
-      structuredDataPresent: Boolean(crawlData?.headings?.length),
+      socialLinks: crawlData.socialLinks || [],
+      structuredDataPresent: Boolean(crawlData?.structuredDataTypes?.length),
       pageSpeedScore: null,
       metaTags: {
         title: crawlData.title || null,
         description: crawlData.description || null,
       },
+      companySnapshot: crawlData.companySnapshot || {},
+      structuredDataTypes: crawlData.structuredDataTypes || [],
+      siteSurfaces: crawlData.siteSurfaces || {},
+      contentFootprint: {
+        ...(crawlData.contentFootprint || {}),
+        headlineCount: crawlData.headings?.length || 0,
+        ctaCount: crawlData.ctas?.length || 0,
+      },
+      technicalSignals: this._buildTechnicalSignals(crawlData),
       contentStrategy: {
         headlineCount: crawlData.headings?.length || 0,
         ctaCount: crawlData.ctas?.length || 0,
@@ -155,6 +179,12 @@ class CompetitorHijackService {
       mode: 'attack',
       researchBasis,
       attackVectors,
+      companySnapshot: crawlData.companySnapshot || {},
+      technicalSignals: this._buildTechnicalSignals(crawlData),
+      contentFootprint: crawlData.contentFootprint || {},
+      siteSurfaces: crawlData.siteSurfaces || {},
+      structuredDataTypes: crawlData.structuredDataTypes || [],
+      socialLinks: crawlData.socialLinks || [],
       weakestPages: (crawlData.headings || []).slice(0, 3).map((h, idx) => ({
         page: h.text,
         reason: idx === 0 ? 'Weak differentiation in headline copy' : 'Likely low CTR due to generic positioning',
@@ -181,6 +211,8 @@ class CompetitorHijackService {
       crawlData.ctas?.[0] ? `Primary CTA observed: "${crawlData.ctas[0]}".` : null,
       crawlData.headings?.[0]?.text ? `Homepage lead headline: "${crawlData.headings[0].text}".` : null,
       crawlData.techStack?.length ? `Detected stack includes ${crawlData.techStack.slice(0, 3).join(', ')}.` : null,
+      crawlData.companySnapshot?.positioning ? `Positioning statement observed: "${crawlData.companySnapshot.positioning}".` : null,
+      crawlData.structuredDataTypes?.length ? `Structured data types detected: ${crawlData.structuredDataTypes.slice(0, 4).join(', ')}.` : null,
     ].filter(Boolean);
   }
 
@@ -238,6 +270,106 @@ class CompetitorHijackService {
     if ((crawlData.ctas?.length || 0) < 2) weaknesses.push('Weak conversion path with too few CTA variations');
     if ((crawlData.headings?.length || 0) < 4) weaknesses.push('Thin on-page structure suggests shallow topical depth');
     return weaknesses;
+  }
+
+  _buildTechnicalSignals(crawlData) {
+    return {
+      hasAnalytics: !!crawlData.hasAnalytics,
+      hasFacebookPixel: !!crawlData.hasFacebookPixel,
+      hasRetargeting: !!crawlData.hasRetargeting,
+      robotsTxtPresent: !!crawlData.robotsTxtPresent,
+      sitemapPresent: !!crawlData.sitemapPresent,
+      sitemapUrlCount: crawlData.sitemapUrlCount || 0,
+      structuredDataTypes: crawlData.structuredDataTypes || [],
+      techStack: crawlData.techStack || [],
+    };
+  }
+
+  _buildSourceMatrix(crawlData, serpEnrichment, aiInsights) {
+    return [
+      {
+        source: 'website_crawl',
+        status: 'ok',
+        detail: `${crawlData.headings?.length || 0} headings, ${crawlData.ctas?.length || 0} CTAs, ${crawlData.internalLinks?.length || 0} internal URLs observed`,
+      },
+      {
+        source: 'valueserp',
+        status: serpEnrichment.providerStatus?.status || 'unavailable',
+        detail: serpEnrichment.providerStatus?.message || 'ValueSERP was not used for this run',
+      },
+      {
+        source: 'organic_fallback',
+        status: serpEnrichment.fallbackStatus?.status || 'unavailable',
+        detail: serpEnrichment.fallbackStatus?.message || 'No fallback organic search result was available',
+      },
+      {
+        source: 'rag_team_memory',
+        status: 'ok',
+        detail: 'Team memory was retrieved from tracked keywords, prior research, and owned content.',
+      },
+      {
+        source: 'anthropic_reasoning',
+        status: aiInsights ? 'ok' : 'unavailable',
+        detail: aiInsights
+          ? 'Anthropic generated evidence-backed strategic synthesis from the observed dossier.'
+          : 'Anthropic did not return strategic synthesis for this run.',
+      },
+    ];
+  }
+
+  _buildEvidenceLog(crawlData, mergedKeywords, teamContext) {
+    const entries = [];
+
+    if (crawlData.companySnapshot?.positioning) {
+      entries.push({ type: 'positioning', detail: crawlData.companySnapshot.positioning });
+    }
+    if (crawlData.heroHeading) {
+      entries.push({ type: 'hero', detail: `Hero heading: "${crawlData.heroHeading}"` });
+    }
+    if (mergedKeywords[0]?.keyword) {
+      entries.push({
+        type: 'keyword',
+        detail: `Observed keyword "${mergedKeywords[0].keyword}"${mergedKeywords[0].position ? ` ranking at #${mergedKeywords[0].position}` : ''}${mergedKeywords[0].rankSource ? ` via ${mergedKeywords[0].rankSource}` : ''}.`,
+      });
+    }
+    if (crawlData.ctas?.[0]) {
+      entries.push({ type: 'cta', detail: `Primary CTA observed: "${crawlData.ctas[0]}".` });
+    }
+    if (crawlData.siteSurfaces?.pricing > 0 || crawlData.siteSurfaces?.blog > 0) {
+      entries.push({
+        type: 'site_surface',
+        detail: `Observed site surfaces: pricing=${crawlData.siteSurfaces?.pricing || 0}, blog=${crawlData.siteSurfaces?.blog || 0}, docs=${crawlData.siteSurfaces?.docs || 0}, features=${crawlData.siteSurfaces?.features || 0}.`,
+      });
+    }
+    if (teamContext?.trackedKeywordOverlap?.length) {
+      entries.push({
+        type: 'rag_overlap',
+        detail: `Team memory shows overlap on ${teamContext.trackedKeywordOverlap.slice(0, 3).map((item) => item.keyword).join(', ')}.`,
+      });
+    }
+
+    return entries.slice(0, 8);
+  }
+
+  _buildDataGaps(crawlData, serpEnrichment, aiInsights) {
+    const gaps = [];
+    if (serpEnrichment.providerStatus?.degraded) gaps.push(serpEnrichment.providerStatus.message);
+    if (serpEnrichment.fallbackStatus?.degraded) gaps.push(serpEnrichment.fallbackStatus.message);
+    if (!crawlData.sitemapPresent) gaps.push('Sitemap could not be confirmed, so content coverage may be incomplete.');
+    if (!crawlData.robotsTxtPresent) gaps.push('robots.txt could not be confirmed from the public site.');
+    if (!aiInsights) gaps.push('Anthropic strategic synthesis was unavailable for this run.');
+    gaps.push(crawlData.adSpendNote || 'Paid ad spend still requires ad-network transparency or paid competitive-intel APIs.');
+    return [...new Set(gaps)].slice(0, 6);
+  }
+
+  _buildRagContext(teamContext) {
+    return {
+      trackedKeywordOverlap: teamContext?.trackedKeywordOverlap || [],
+      topOwnedKeywords: teamContext?.topOwnedKeywords || [],
+      priorResearch: teamContext?.priorResearch || [],
+      recentBriefs: teamContext?.recentBriefs || [],
+      recentAudits: teamContext?.recentAudits || [],
+    };
   }
 
   _mergeKeywordEvidence(crawlKeywords, enrichedKeywords) {

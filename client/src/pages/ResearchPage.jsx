@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Globe, Search, Plus, Trash2, TrendingUp, Target, Copy, ChevronRight,
-  AlertCircle, Zap, Loader2, Sparkles, DollarSign, Key, FlaskConical, Download, ChevronDown,
+  Globe, Search, Plus, Trash2, Target,
+  AlertCircle, Zap, Loader2, Sparkles, FlaskConical, Download, ChevronDown,
 } from 'lucide-react';
 import { downloadMarkdownReport } from '../lib/exportReport';
 import api from '../lib/api';
 import { useToast } from '../components/ui/Toast';
-import Badge from '../components/ui/Badge';
 import FeatureHeader from '../components/ui/FeatureHeader';
 import { FEATURES } from '../config/features';
 
@@ -230,7 +229,33 @@ function normalizeMarketResearchResult(data = {}) {
     threatLevel: data.threatLevel || null,
     contentTypes: data.contentStrategy?.contentTypes || [],
     topics: data.contentStrategy?.topics || [],
+    companySnapshot: data.companySnapshot || {},
+    technicalSignals: data.technicalSignals || {},
+    sourceMatrix: data.sourceMatrix || [],
+    evidenceLog: data.evidenceLog || [],
+    dataGaps: data.dataGaps || [],
+    socialLinks: data.socialLinks || [],
+    siteSurfaces: data.siteSurfaces || {},
+    contentFootprint: data.contentFootprint || {},
+    structuredDataTypes: data.structuredDataTypes || [],
+    ragContext: data.ragContext || {},
     savedAt: data.savedAt || null,
+  };
+}
+
+function normalizeAdIntelResult(data = {}) {
+  return {
+    ...data,
+    sourceMatrix: data.sourceMatrix || [],
+    evidenceLog: data.evidenceLog || [],
+    dataGaps: data.dataGaps || [],
+    companySnapshot: data.companySnapshot || {},
+    technicalSignals: data.technicalSignals || {},
+    contentFootprint: data.contentFootprint || {},
+    siteSurfaces: data.siteSurfaces || {},
+    socialLinks: data.socialLinks || [],
+    structuredDataTypes: data.structuredDataTypes || [],
+    ragContext: data.ragContext || {},
   };
 }
 
@@ -248,6 +273,35 @@ function SavedReportCard({ title, subtitle, isExpanded, onToggle, children }) {
         {isExpanded ? <ChevronDown className="w-4 h-4 text-text-secondary rotate-180 transition-transform" /> : <ChevronDown className="w-4 h-4 text-text-secondary transition-transform" />}
       </button>
       {isExpanded && <div className="mt-4">{children}</div>}
+    </div>
+  );
+}
+
+function SourcePill({ item }) {
+  const status = item?.status || 'unavailable';
+  const cls =
+    status === 'ok' ? 'bg-accent-green/10 text-accent-green border-accent-green/20' :
+    status === 'degraded_cache' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+    status === 'quota_exhausted' || status === 'rate_limited' || status === 'unavailable' || status === 'missing_key'
+      ? 'bg-red-500/10 text-red-300 border-red-500/20'
+      : 'bg-accent-blue/10 text-accent-blue border-accent-blue/20';
+
+  return (
+    <div className={`rounded-xl border px-3 py-2 ${cls}`}>
+      <p className="text-[11px] font-semibold uppercase tracking-wider">{String(item?.source || 'source').replace(/_/g, ' ')}</p>
+      <p className="text-xs mt-1 leading-relaxed">{item?.detail || item?.message || 'No detail available'}</p>
+    </div>
+  );
+}
+
+function DossierSection({ title, subtitle, children }) {
+  return (
+    <div className="card space-y-3">
+      <div>
+        <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider">{title}</p>
+        {subtitle && <p className="text-xs text-text-secondary mt-1">{subtitle}</p>}
+      </div>
+      {children}
     </div>
   );
 }
@@ -391,17 +445,67 @@ function MarketResearchSection() {
                     Saved {new Date(savedResult.savedAt).toLocaleString()}
                   </div>
 
-                  <div className="card">
+                  <div className="card space-y-3">
                     <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1">{savedResult.domain}</p>
                     <p className="text-sm text-text-primary font-medium">{savedResult.title}</p>
                     {savedResult.description && <p className="text-xs text-text-secondary mt-1 line-clamp-2">{savedResult.description}</p>}
                     {savedResult.threatLevel && <p className="text-xs text-accent-blue mt-2">Threat level: {savedResult.threatLevel}</p>}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="rounded-xl border border-border px-3 py-2">
+                        <p className="text-[11px] uppercase tracking-wider text-text-secondary">Observed URLs</p>
+                        <p className="text-sm font-semibold text-text-primary mt-1">{savedResult.contentFootprint?.totalInternalPagesObserved || 0}</p>
+                      </div>
+                      <div className="rounded-xl border border-border px-3 py-2">
+                        <p className="text-[11px] uppercase tracking-wider text-text-secondary">Schema Types</p>
+                        <p className="text-sm font-semibold text-text-primary mt-1">{savedResult.structuredDataTypes?.length || 0}</p>
+                      </div>
+                      <div className="rounded-xl border border-border px-3 py-2">
+                        <p className="text-[11px] uppercase tracking-wider text-text-secondary">Social Links</p>
+                        <p className="text-sm font-semibold text-text-primary mt-1">{savedResult.socialLinks?.length || 0}</p>
+                      </div>
+                    </div>
                   </div>
+
+                  {savedResult.sourceMatrix?.length > 0 && (
+                    <DossierSection title="Research Sources" subtitle="What powered this report">
+                      <div className="grid sm:grid-cols-2 gap-2">
+                        {savedResult.sourceMatrix.map((item, idx) => (
+                          <SourcePill key={`${item.source}-${idx}`} item={item} />
+                        ))}
+                      </div>
+                    </DossierSection>
+                  )}
+
+                  {savedResult.companySnapshot?.primaryOffer && (
+                    <DossierSection title="Company Snapshot" subtitle="Derived from the live crawl and research layer">
+                      <div className="space-y-2">
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wider text-text-secondary">Primary Offer</p>
+                          <p className="text-sm text-text-primary font-medium mt-1">{savedResult.companySnapshot.primaryOffer}</p>
+                        </div>
+                        {savedResult.companySnapshot.positioning && (
+                          <div>
+                            <p className="text-[11px] uppercase tracking-wider text-text-secondary">Positioning</p>
+                            <p className="text-xs text-text-secondary mt-1 leading-relaxed">{savedResult.companySnapshot.positioning}</p>
+                          </div>
+                        )}
+                        <div className="grid sm:grid-cols-2 gap-3">
+                          <div className="rounded-xl border border-border px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wider text-text-secondary">Target Audience</p>
+                            <p className="text-sm text-text-primary mt-1">{savedResult.companySnapshot.targetAudience || 'Unknown'}</p>
+                          </div>
+                          <div className="rounded-xl border border-border px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wider text-text-secondary">Primary CTA</p>
+                            <p className="text-sm text-text-primary mt-1">{savedResult.companySnapshot.primaryCallToAction || 'Unavailable'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </DossierSection>
+                  )}
 
                   <div className="grid sm:grid-cols-2 gap-4">
                     {savedResult.topKeywords.length > 0 && (
-                      <div className="card">
-                        <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-3">Keywords They Target</p>
+                      <DossierSection title="Keyword Footprint" subtitle="Observed search and on-site demand signals">
                         <div className="space-y-2">
                           {savedResult.topKeywords.map((kw) => (
                             <div key={kw.keyword} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-xs">
@@ -413,12 +517,40 @@ function MarketResearchSection() {
                             </div>
                           ))}
                         </div>
-                      </div>
+                      </DossierSection>
                     )}
 
+                    <DossierSection title="Site Surfaces" subtitle="Which paths are visible from the crawl">
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        {[
+                          ['Pricing', savedResult.siteSurfaces?.pricing || 0],
+                          ['Blog', savedResult.siteSurfaces?.blog || 0],
+                          ['Docs', savedResult.siteSurfaces?.docs || 0],
+                          ['Features', savedResult.siteSurfaces?.features || 0],
+                          ['Case Studies', savedResult.siteSurfaces?.caseStudies || 0],
+                          ['Integrations', savedResult.siteSurfaces?.integrations || 0],
+                        ].map(([label, value]) => (
+                          <div key={label} className="rounded-xl border border-border px-3 py-2">
+                            <p className="text-text-secondary">{label}</p>
+                            <p className="text-sm text-text-primary font-semibold mt-1">{value}</p>
+                          </div>
+                        ))}
+                      </div>
+                      {savedResult.structuredDataTypes?.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {savedResult.structuredDataTypes.map((item) => (
+                            <span key={item} className="text-[11px] px-2 py-1 rounded-full border border-border text-text-secondary">
+                              {item}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </DossierSection>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-4">
                     {savedResult.weaknesses.length > 0 && (
-                      <div className="card">
-                        <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-3">Weaknesses to Exploit</p>
+                      <DossierSection title="Weaknesses To Exploit" subtitle="Evidence-backed gaps worth attacking">
                         <div className="space-y-1.5">
                           {savedResult.weaknesses.map((w, i) => (
                             <div key={i} className="flex items-start gap-2 text-sm text-text-secondary">
@@ -426,9 +558,59 @@ function MarketResearchSection() {
                             </div>
                           ))}
                         </div>
-                      </div>
+                      </DossierSection>
+                    )}
+
+                    {savedResult.evidenceLog?.length > 0 && (
+                      <DossierSection title="Evidence Highlights" subtitle="What the engine actually observed">
+                        <div className="space-y-2">
+                          {savedResult.evidenceLog.map((item, idx) => (
+                            <div key={`${item.type}-${idx}`} className="rounded-xl border border-border px-3 py-2">
+                              <p className="text-[11px] uppercase tracking-wider text-text-secondary">{String(item.type || 'evidence').replace(/_/g, ' ')}</p>
+                              <p className="text-xs text-text-primary mt-1 leading-relaxed">{item.detail}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </DossierSection>
                     )}
                   </div>
+
+                  {(savedResult.ragContext?.trackedKeywordOverlap?.length > 0 || savedResult.ragContext?.priorResearch?.length > 0) && (
+                    <DossierSection title="RAG Context" subtitle="How this research connects to your team memory">
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <p className="text-[11px] uppercase tracking-wider text-text-secondary">Keyword Overlap</p>
+                          {(savedResult.ragContext?.trackedKeywordOverlap || []).slice(0, 4).map((item) => (
+                            <div key={item.keyword} className="rounded-xl border border-border px-3 py-2 text-xs">
+                              <p className="text-text-primary font-medium">{item.keyword}</p>
+                              <p className="text-text-secondary mt-1">Your rank: {item.currentRank ?? 'n/a'} • Volume: {item.searchVolume ?? 'n/a'}</p>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-[11px] uppercase tracking-wider text-text-secondary">Prior Research</p>
+                          {(savedResult.ragContext?.priorResearch || []).slice(0, 4).map((item, idx) => (
+                            <div key={`${item.query}-${idx}`} className="rounded-xl border border-border px-3 py-2 text-xs">
+                              <p className="text-text-primary font-medium">{item.query}</p>
+                              <p className="text-text-secondary mt-1">{item.summary || item.kind}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </DossierSection>
+                  )}
+
+                  {savedResult.dataGaps?.length > 0 && (
+                    <DossierSection title="Data Gaps" subtitle="Signals that still need a stronger source">
+                      <div className="space-y-2">
+                        {savedResult.dataGaps.map((gap, idx) => (
+                          <div key={idx} className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-text-secondary">
+                            {gap}
+                          </div>
+                        ))}
+                      </div>
+                    </DossierSection>
+                  )}
                 </div>
               </SavedReportCard>
             );
@@ -466,10 +648,10 @@ function AdIntelSection() {
 
   useEffect(() => {
     if (!latestAdIntelReport?.analysis) return;
-    setResult({
+    setResult(normalizeAdIntelResult({
       ...latestAdIntelReport.analysis,
       savedAt: latestAdIntelReport.createdAt,
-    });
+    }));
     setExpandedReportId((current) => current ?? latestAdIntelReport.id);
   }, [latestAdIntelReport]);
 
@@ -485,7 +667,7 @@ function AdIntelSection() {
     try {
       const res = await api.get(`/research/hijack-analysis?domain=${encodeURIComponent(url.trim())}`);
       clearInterval(interval);
-      setResult(res.data.data);
+      setResult(normalizeAdIntelResult(res.data.data));
       setUrl('');
       setExpandedReportId(res.data.data.reportId || null);
       queryClient.invalidateQueries({ queryKey: ['research', 'latest', 'ad-intelligence'] });
@@ -560,7 +742,7 @@ function AdIntelSection() {
       {(adIntelReports.length > 0 || result) && !loading && (
         <div className="space-y-4">
           {adIntelReports.map((report) => {
-            const savedResult = { ...(report.analysis || {}), savedAt: report.createdAt };
+            const savedResult = normalizeAdIntelResult({ ...(report.analysis || {}), savedAt: report.createdAt });
             const expanded = expandedReportId === report.id;
             return (
               <SavedReportCard
@@ -590,20 +772,49 @@ function AdIntelSection() {
                     </div>
                   </div>
 
+                  {savedResult.sourceMatrix?.length > 0 && (
+                    <DossierSection title="Research Sources" subtitle="Which engines and evidence feeds powered this attack plan">
+                      <div className="grid sm:grid-cols-2 gap-2">
+                        {savedResult.sourceMatrix.map((item, idx) => (
+                          <SourcePill key={`${item.source}-${idx}`} item={item} />
+                        ))}
+                      </div>
+                    </DossierSection>
+                  )}
+
+                  {savedResult.companySnapshot?.primaryOffer && (
+                    <DossierSection title="Positioning Snapshot" subtitle="Live offer and buyer framing observed on-site">
+                      <div className="space-y-2">
+                        <p className="text-sm text-text-primary font-medium">{savedResult.companySnapshot.primaryOffer}</p>
+                        {savedResult.companySnapshot.positioning && (
+                          <p className="text-xs text-text-secondary leading-relaxed">{savedResult.companySnapshot.positioning}</p>
+                        )}
+                        <div className="grid sm:grid-cols-2 gap-3">
+                          <div className="rounded-xl border border-border px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wider text-text-secondary">Target Audience</p>
+                            <p className="text-sm text-text-primary mt-1">{savedResult.companySnapshot.targetAudience || 'Unknown'}</p>
+                          </div>
+                          <div className="rounded-xl border border-border px-3 py-2">
+                            <p className="text-[11px] uppercase tracking-wider text-text-secondary">Primary CTA</p>
+                            <p className="text-sm text-text-primary mt-1">{savedResult.companySnapshot.primaryCallToAction || 'Unavailable'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </DossierSection>
+                  )}
+
                   {savedResult.researchBasis?.length > 0 && (
-                    <div>
-                      <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Research Basis</h4>
+                    <DossierSection title="Research Basis" subtitle="Core observations behind the attack analysis">
                       <div className="space-y-2">
                         {savedResult.researchBasis.map((item, i) => (
                           <div key={i} className="card text-xs text-text-secondary">{item}</div>
                         ))}
                       </div>
-                    </div>
+                    </DossierSection>
                   )}
 
                   {savedResult.attackVectors?.length > 0 && (
-                    <div>
-                      <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Attack Vectors</h4>
+                    <DossierSection title="Attack Vectors" subtitle="Fastest evidence-backed moves to intercept demand">
                       <div className="space-y-2">
                         {savedResult.attackVectors.map((vector, i) => (
                           <div key={i} className="card space-y-1.5">
@@ -613,11 +824,10 @@ function AdIntelSection() {
                           </div>
                         ))}
                       </div>
-                    </div>
+                    </DossierSection>
                   )}
 
-                  <div>
-                    <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Win-back Opportunities</h4>
+                  <DossierSection title="Win-back Opportunities" subtitle="Only shown when the evidence supports a real intercept move">
                     {(savedResult.winbackOpportunities ?? []).length > 0 ? (
                       <div className="space-y-2">
                         {(savedResult.winbackOpportunities ?? []).map((opp, i) => (
@@ -636,18 +846,17 @@ function AdIntelSection() {
                         {savedResult.winbackUnavailableReason || 'No evidence-backed win-back opportunity is available yet. This section stays empty until the analysis has real recovery evidence.'}
                       </div>
                     )}
-                  </div>
+                  </DossierSection>
 
                   {savedResult.topKeywords?.length > 0 && (
-                    <div>
-                      <h4 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Keyword Footprint</h4>
+                    <DossierSection title="Keyword Footprint" subtitle="Observed demand surface and rank signals">
                       <div className="space-y-2">
                         {savedResult.topKeywords.map((kw, i) => (
                           <div key={`${kw.keyword}-${i}`} className="card flex items-center justify-between gap-3">
                             <div>
                               <p className="text-sm font-semibold text-text-primary">{kw.keyword}</p>
                               <p className="text-[11px] text-text-secondary mt-1">
-                                {kw.position ? `Observed rank #${kw.position}` : 'Observed on-site keyword only'}
+                                {kw.position ? `Observed rank #${kw.position}${kw.rankSource ? ` via ${kw.rankSource}` : ''}` : 'Observed on-site keyword only'}
                               </p>
                             </div>
                             <div className="text-right text-xs text-text-secondary">
@@ -656,7 +865,61 @@ function AdIntelSection() {
                           </div>
                         ))}
                       </div>
+                    </DossierSection>
+                  )}
+
+                  {(savedResult.evidenceLog?.length > 0 || savedResult.dataGaps?.length > 0) && (
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      {savedResult.evidenceLog?.length > 0 && (
+                        <DossierSection title="Evidence Highlights" subtitle="Observed signals the strategy is built on">
+                          <div className="space-y-2">
+                            {savedResult.evidenceLog.map((item, idx) => (
+                              <div key={`${item.type}-${idx}`} className="rounded-xl border border-border px-3 py-2">
+                                <p className="text-[11px] uppercase tracking-wider text-text-secondary">{String(item.type || 'evidence').replace(/_/g, ' ')}</p>
+                                <p className="text-xs text-text-primary mt-1 leading-relaxed">{item.detail}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </DossierSection>
+                      )}
+
+                      {savedResult.dataGaps?.length > 0 && (
+                        <DossierSection title="Data Gaps" subtitle="Missing signals that still limit confidence">
+                          <div className="space-y-2">
+                            {savedResult.dataGaps.map((gap, idx) => (
+                              <div key={idx} className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-text-secondary">
+                                {gap}
+                              </div>
+                            ))}
+                          </div>
+                        </DossierSection>
+                      )}
                     </div>
+                  )}
+
+                  {(savedResult.ragContext?.trackedKeywordOverlap?.length > 0 || savedResult.ragContext?.topOwnedKeywords?.length > 0) && (
+                    <DossierSection title="RAG Context" subtitle="Where this competitor intersects with your owned demand and prior work">
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <p className="text-[11px] uppercase tracking-wider text-text-secondary">Tracked Overlap</p>
+                          {(savedResult.ragContext?.trackedKeywordOverlap || []).slice(0, 4).map((item) => (
+                            <div key={item.keyword} className="rounded-xl border border-border px-3 py-2 text-xs">
+                              <p className="text-text-primary font-medium">{item.keyword}</p>
+                              <p className="text-text-secondary mt-1">Your rank: {item.currentRank ?? 'n/a'} • Previous: {item.previousRank ?? 'n/a'}</p>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-[11px] uppercase tracking-wider text-text-secondary">Top Owned Keywords</p>
+                          {(savedResult.ragContext?.topOwnedKeywords || []).slice(0, 4).map((item) => (
+                            <div key={item.keyword} className="rounded-xl border border-border px-3 py-2 text-xs">
+                              <p className="text-text-primary font-medium">{item.keyword}</p>
+                              <p className="text-text-secondary mt-1">Your rank: {item.currentRank ?? 'n/a'} • Volume: {item.searchVolume ?? 'n/a'}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </DossierSection>
                   )}
                 </div>
               </SavedReportCard>

@@ -294,6 +294,40 @@ Frontend: React 18 / Vite / Tailwind / React Query / Zustand / Recharts.
 - Win-back normalization check confirmed generic entries are rejected while keyword-grounded entries still pass.
 - `npm run build` passed after the fallback evidence changes.
 
+### Session Update — March 12, 2026 (Phase 5: VPS Deploy + Live Verification)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| VPS code sync | ✅ | Latest app changes through commit `1032d633` were packaged locally and synced onto the dirty VPS worktree without wiping unrelated server-only files |
+| App rebuild on VPS | ✅ | `adpilot-app` was rebuilt and restarted successfully via Docker Compose on `194.163.146.149` |
+| Live host/port verification | ✅ | App container is live on host `194.163.146.149` port `3001` and backend health returned `200 OK` |
+| Keyword research live verification | ✅ | Live `/api/v1/seo/keywords/research` returned the new `providerStatus` structure showing `valueserp=quota_exhausted` and `organicFallback=unavailable`, proving the new degraded-state reporting is live |
+| Content brief live verification | ✅ | Live `/api/v1/seo/briefs` generated successfully on VPS with `source=anthropic`, `outlineCount=10`, `peopleAlsoAskCount=6`, and `titleOptionsCount=5` |
+
+**Deployment note:**
+- The VPS Git worktree is still dirty and not safe for blind `git pull`, so deployment was done by syncing only the changed tracked files and rebuilding the app image.
+- ValueSERP is still returning live `402` on the VPS, but the app now reports that honestly and keeps the rest of the flow running instead of failing silently.
+
+### Session Update — March 12, 2026 (Phase 6: Research Dossier Architecture + RAG Surfacing)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Research controller cleanup | ✅ | Research flows now route through a dedicated `ResearchOrchestratorService` and `ResearchReportRepository` instead of mixing persistence and orchestration inside the controller |
+| Richer competitor crawl evidence | ✅ | `CompetitorAnalyzer` now collects hero copy, social links, structured-data types, internal-link surfaces, robots/sitemap signals, and a company snapshot in addition to headings/CTAs/tech stack |
+| Radar dossier expansion | ✅ | Overview analysis now returns company snapshot, technical signals, content footprint, site surfaces, source matrix, evidence log, data gaps, and RAG context |
+| Ad Intelligence dossier expansion | ✅ | Attack analysis now returns the same evidence framework plus richer source attribution, keyword rank-source metadata, and explicit data gaps |
+| RAG surfaced in product output | ✅ | Team-memory overlap, prior research, owned keywords, and recent briefs/audits are now exposed in the response payload as `ragContext`, not hidden only inside the prompt |
+| Research Hub UI richness pass | ✅ | Market Research and Ad Intelligence cards now render dossier-style sections for sources, company snapshot, evidence highlights, site surfaces, RAG context, and data gaps while preserving the existing visual language |
+
+**Design intent:**
+- The goal is no longer “crawl a site and ask AI to summarize it.”
+- Research Hub is moving toward a reusable evidence dossier: crawl signals, search-provider status, team-memory retrieval, and strategic synthesis all visible as separate layers.
+- This keeps the product more honest and more impressive at the same time: the richness comes from evidence density, not generic AI text.
+
+**Local verification:**
+- Module-load checks passed for the new repository/orchestrator/research services and updated research controller.
+- `npm run build` passed after the Research Hub dossier and UI updates.
+
 ### Phase C — Complete UI/UX Polish ✅ Complete
 
 **Built this session:**
