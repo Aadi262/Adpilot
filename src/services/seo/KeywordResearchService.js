@@ -168,13 +168,27 @@ async function research(q, { teamId } = {}) {
     googleAutocomplete(q),
     ddgSuggest(q),
     googleTrends(q),
-    serpIntelligence.getKeywordSnapshot(q),
+    serpIntelligence.getKeywordSnapshotWithMeta(q),
   ]);
 
   const gSuggs = googleSuggs.status === 'fulfilled' ? googleSuggs.value : [];
   const dSuggs = ddgSuggs.status === 'fulfilled' ? ddgSuggs.value : [];
   const trends = trendsData.status === 'fulfilled' ? trendsData.value : null;
-  const serp = serpSnapshot.status === 'fulfilled' ? serpSnapshot.value : null;
+  const serpResult = serpSnapshot.status === 'fulfilled'
+    ? serpSnapshot.value
+    : {
+        snapshot: null,
+        providerStatus: {
+          provider: 'valueserp',
+          status: 'error',
+          degraded: true,
+          source: 'service',
+          message: 'SERP enrichment failed before a provider response was returned.',
+        },
+        cached: false,
+      };
+  const serp = serpResult.snapshot;
+  const valueSerpAvailable = !!serp && ['ok', 'degraded_cache'].includes(serpResult.providerStatus?.status);
 
   const mergedKeywords = [...new Set([
     ...gSuggs,
@@ -224,11 +238,14 @@ async function research(q, { teamId } = {}) {
     serpFeatures: analysis.serpFeatures || serp?.serpFeatures || [],
     trends: trends || { averageInterest: 0, peakInterest: 0, trend: 'stable', deltaPct: 0, dataPoints: [] },
     analysis,
+    providerStatus: {
+      valueSerp: serpResult.providerStatus || null,
+    },
     sources: {
       googleAutocomplete: gSuggs.length > 0,
       ddgSuggest: dSuggs.length > 0,
       googleTrends: !!trends,
-      valueSerp: !!serp,
+      valueSerp: valueSerpAvailable,
       aiInsights: !!insights,
     },
   };

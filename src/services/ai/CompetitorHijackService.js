@@ -40,7 +40,8 @@ class CompetitorHijackService {
     if (crawlData) {
       let aiInsights = null;
       const teamContext = await teamContextService.getCompetitorContext(teamId, cleanDomain);
-      const enrichedKeywords = await serpIntelligence.enrichKeywordList((crawlData.topKeywords || []).slice(0, 8), cleanDomain);
+      const serpEnrichment = await serpIntelligence.enrichKeywordListWithMeta((crawlData.topKeywords || []).slice(0, 8), cleanDomain);
+      const enrichedKeywords = serpEnrichment.keywords || [];
       const mergedKeywords = this._mergeKeywordEvidence(crawlData.topKeywords || [], enrichedKeywords);
       const researchBasis = this._buildResearchBasis({ topKeywords: mergedKeywords }, crawlData);
       const aiParams = {
@@ -97,6 +98,7 @@ class CompetitorHijackService {
         // Data quality flags
         isReal:     true,
         hasAiInsights: !!aiInsights,
+        serpProviderStatus: serpEnrichment.providerStatus || null,
         crawledAt:  crawlData.crawledAt,
       };
 
@@ -157,6 +159,9 @@ class CompetitorHijackService {
         reason: idx === 0 ? 'Weak differentiation in headline copy' : 'Likely low CTR due to generic positioning',
       })),
       counterAdTemplates: baseResult.counterAdTemplates || [],
+      serpDataNote: baseResult.serpProviderStatus?.degraded
+        ? baseResult.serpProviderStatus.message
+        : null,
       timingInsights: baseResult.hasAiInsights
         ? ['Paid competition exists on this SERP, indicating active budget pressure.', 'Monitor this keyword weekly for new ad copy changes.']
         : ['Live spend timing data is unavailable without ad network transparency APIs.'],

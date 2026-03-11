@@ -235,9 +235,12 @@ Return ONLY the JSON object, no markdown, no extra text.`;
   }
 
   async _buildSerpContext(targetKeyword) {
-    const { snapshot, topResults } = await serpIntelligence.getTopResultDetails(targetKeyword, 5);
+    const { snapshot, topResults, providerStatus } = await serpIntelligence.getTopResultDetailsWithMeta(targetKeyword, 5);
     if (!snapshot) {
-      logger.warn('ContentBriefService: SERP data unavailable — brief will use AI-only context');
+      logger.warn('ContentBriefService: SERP data unavailable — brief will use AI-only context', {
+        keyword: targetKeyword,
+        providerStatus: providerStatus?.status,
+      });
     }
     return {
       searchVolume: null,
@@ -247,6 +250,7 @@ Return ONLY the JSON object, no markdown, no extra text.`;
       relatedSearches: snapshot?.relatedSearches || [],
       serpFeatures: snapshot?.serpFeatures || [],
       totalResults: snapshot?.totalResults || null,
+      providerStatus: providerStatus || null,
     };
   }
 

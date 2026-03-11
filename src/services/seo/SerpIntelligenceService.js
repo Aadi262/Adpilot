@@ -3,46 +3,23 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const logger = require('../../config/logger');
+const serpProvider = require('./SerpProviderService');
 
 class SerpIntelligenceService {
-  constructor() {
-    this.apiKey = process.env.VALUESERP_API_KEY || null;
-    this.baseUrl = 'https://api.valueserp.com/search';
-  }
-
   get isAvailable() {
-    return !!this.apiKey;
+    return serpProvider.isAvailable;
   }
 
   async search(query, { num = 10, location = 'India', gl = 'in', hl = 'en' } = {}) {
-    if (!this.apiKey) return null;
-
-    try {
-      const params = new URLSearchParams({
-        api_key: this.apiKey,
-        q: query,
-        location,
-        google_domain: gl === 'in' ? 'google.co.in' : 'google.com',
-        gl,
-        hl,
-        num: String(num),
-        output: 'json',
-      });
-
-      const res = await fetch(`${this.baseUrl}?${params}`, { signal: AbortSignal.timeout(15000) });
-      if (!res.ok) {
-        logger.warn('SerpIntelligenceService.search failed', { query, status: res.status });
-        return null;
-      }
-      return res.json();
-    } catch (err) {
-      logger.warn('SerpIntelligenceService.search error', { query, message: err.message });
-      return null;
-    }
+    const result = await this.searchWithMeta(query, { num, location, gl, hl });
+    return result.data;
   }
 
-  async getKeywordSnapshot(keyword) {
-    const data = await this.search(keyword, { num: 10 });
+  async searchWithMeta(query, { num = 10, location = 'India', gl = 'in', hl = 'en' } = {}) {
+    return serpProvider.search(query, { num, location, gl, hl });
+  }
+
+  _toKeywordSnapshot(data) {
     if (!data) return null;
 
     const organicResults = Array.isArray(data.organic_results) ? data.organic_results : [];
@@ -70,20 +47,50 @@ class SerpIntelligenceService {
     };
   }
 
+  async getKeywordSnapshot(keyword) {
+    const result = await this.getKeywordSnapshotWithMeta(keyword);
+    return result.snapshot;
+  }
+
+  async getKeywordSnapshotWithMeta(keyword) {
+    const result = await this.searchWithMeta(keyword, { num: 10 });
+    return {
+      snapshot: this._toKeywordSnapshot(result.data),
+      providerStatus: result.providerStatus,
+      cached: result.cached,
+    };
+  }
+
   async getTopResultDetails(keyword, limit = 5) {
-    const snapshot = await this.getKeywordSnapshot(keyword);
+    const result = await this.getTopResultDetailsWithMeta(keyword, limit);
+    return {
+      snapshot: result.snapshot,
+      topResults: result.topResults,
+    };
+  }
+
+  async getTopResultDetailsWithMeta(keyword, limit = 5) {
+    const { snapshot, providerStatus, cached } = await this.getKeywordSnapshotWithMeta(keyword);
     const topResults = (snapshot?.organicResults || []).slice(0, limit);
 
     const details = await Promise.all(topResults.map((result) => this._fetchPageDetails(result)));
     return {
       snapshot,
       topResults: details.filter(Boolean),
+      providerStatus,
+      cached,
     };
   }
 
   async enrichKeywordList(keywords = [], domain = null) {
+    const result = await this.enrichKeywordListWithMeta(keywords, domain);
+    return result.keywords;
+  }
+
+  async enrichKeywordListWithMeta(keywords = [], domain = null) {
     const seen = new Set();
     const output = [];
+    let providerStatus = null;
 
     for (const rawKeyword of keywords) {
       const keyword = typeof rawKeyword === 'string'
@@ -93,7 +100,9 @@ class SerpIntelligenceService {
       if (!clean || seen.has(clean)) continue;
       seen.add(clean);
 
-      const snapshot = await this.getKeywordSnapshot(clean);
+      const result = await this.getKeywordSnapshotWithMeta(clean);
+      const snapshot = result.snapshot;
+      providerStatus = providerStatus || result.providerStatus;
       const rankingMatch = domain
         ? (snapshot?.organicResults || []).find((result) => this._matchesDomain(result.domain || result.link, domain))
         : null;
@@ -110,7 +119,10 @@ class SerpIntelligenceService {
       });
     }
 
-    return output;
+    return {
+      keywords: output,
+      providerStatus,
+    };
   }
 
   async _fetchPageDetails(result) {

@@ -253,6 +253,26 @@ Frontend: React 18 / Vite / Tailwind / React Query / Zustand / Recharts.
 - The old boot-time `prisma db push --accept-data-loss` path and initial Prisma `P1000` startup noise are no longer present.
 - Production `/health` returned `200` after the redeploy.
 
+### Session Update — March 11, 2026 (Phase 3: SERP Provider Hardening)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Shared ValueSERP provider layer | ✅ | Added `SerpProviderService` so research enrichment and keyword rank tracking no longer maintain separate ValueSERP call logic |
+| Redis-backed SERP response caching | ✅ | Successful ValueSERP responses are now cached centrally before downstream parsing so repeated lookups stay faster and more stable |
+| ValueSERP cooldown / negative cache | ✅ | `402`, auth failures, and rate limits now create a cooldown window instead of hammering the provider and returning repeated silent nulls |
+| Explicit degraded-state metadata | ✅ | Keyword research and competitor analysis paths now surface provider status metadata such as `missing_key`, `quota_exhausted`, `rate_limited`, or `degraded_cache` |
+| Keyword tracking provider reuse | ✅ | `SerpService` rank checks now reuse the same hardened ValueSERP client before falling back to DuckDuckGo |
+| Content brief SERP diagnostics | ✅ | Brief generation now logs the provider status when SERP context is unavailable, instead of treating all failures as indistinguishable nulls |
+
+**Why this matters:**
+- The previous behavior silently collapsed many ValueSERP failures into `null`, which made research features look broken or generic instead of honestly degraded.
+- This phase keeps the engine deterministic: cached data is reused when safe, provider outages cool down centrally, and downstream services can explain what data is missing.
+
+**Local verification:**
+- Shared engine module load check passed for the updated SERP provider, SEO intelligence, keyword research, content briefs, and competitor analysis services.
+- `npm run build` passed after the provider-layer changes.
+- Forced degraded-state checks confirmed `missing_key` now returns explicit provider metadata instead of silent null behavior.
+
 ### Phase C — Complete UI/UX Polish ✅ Complete
 
 **Built this session:**

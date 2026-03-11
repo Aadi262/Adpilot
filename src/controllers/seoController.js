@@ -647,6 +647,7 @@ exports.researchKeyword = async (req, res, next) => {
       // Meta
       source:           sourceLabels,
       sources:          data.sources,
+      providerStatus:   data.providerStatus || {},
       _cached:          cached,
     };
 

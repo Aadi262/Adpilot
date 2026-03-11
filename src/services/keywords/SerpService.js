@@ -2,6 +2,7 @@
 
 const logger        = require('../../config/logger');
 const googleScraper = require('./GoogleScraper');
+const serpProvider  = require('../seo/SerpProviderService');
 
 /**
  * SerpService — Keyword rank tracking with 3-tier fallback.
@@ -13,13 +14,8 @@ const googleScraper = require('./GoogleScraper');
  *   3. Mock drift        — ±3 from seeded starting position (last resort)
  */
 class SerpService {
-  constructor() {
-    this.apiKey  = process.env.VALUESERP_API_KEY || null;
-    this.baseUrl = 'https://api.valueserp.com/search';
-  }
-
   get hasValueSerp() {
-    return !!this.apiKey;
+    return serpProvider.isAvailable;
   }
 
   /**
@@ -30,7 +26,7 @@ class SerpService {
    */
   async getRank(keyword, targetDomain) {
     // 1. ValueSERP (accurate Google results)
-    if (this.apiKey) {
+    if (this.hasValueSerp) {
       const result = await this._valueSerp(keyword, targetDomain);
       if (result.isReal !== false) return result;
     }
@@ -63,24 +59,24 @@ class SerpService {
    */
   async _valueSerp(keyword, targetDomain) {
     try {
-      const params = new URLSearchParams({
-        api_key:       this.apiKey,
-        q:             keyword,
-        location:      'India',
-        google_domain: 'google.co.in',
-        gl:            'in',
-        hl:            'en',
-        num:           '50',
-        output:        'json',
-      });
-
-      const res = await fetch(`${this.baseUrl}?${params}`);
-      if (!res.ok) {
-        logger.error('ValueSERP API error', { status: res.status, keyword });
-        return { position: null, url: null, title: null, isReal: false, source: 'valueserp' };
+      const result = await serpProvider.search(keyword, { num: 50 });
+      const data = result.data;
+      if (!data) {
+        logger.warn('SerpService._valueSerp unavailable', {
+          keyword,
+          status: result.providerStatus?.status,
+          source: result.providerStatus?.source,
+        });
+        return {
+          position: null,
+          url: null,
+          title: null,
+          isReal: false,
+          source: 'valueserp',
+          providerStatus: result.providerStatus || null,
+        };
       }
 
-      const data    = await res.json();
       const results = data?.organic_results ?? [];
 
       const cleanTarget = targetDomain
@@ -95,11 +91,32 @@ class SerpService {
       });
 
       return match
-        ? { position: match.position, url: match.link, title: match.title, isReal: true, source: 'valueserp' }
-        : { position: null, url: null, title: null, isReal: true, source: 'valueserp' };
+        ? {
+            position: match.position,
+            url: match.link,
+            title: match.title,
+            isReal: true,
+            source: 'valueserp',
+            providerStatus: result.providerStatus || null,
+          }
+        : {
+            position: null,
+            url: null,
+            title: null,
+            isReal: true,
+            source: 'valueserp',
+            providerStatus: result.providerStatus || null,
+          };
     } catch (err) {
       logger.error('SerpService._valueSerp failed', { keyword, error: err.message });
-      return { position: null, url: null, title: null, isReal: false, source: 'valueserp' };
+      return {
+        position: null,
+        url: null,
+        title: null,
+        isReal: false,
+        source: 'valueserp',
+        providerStatus: null,
+      };
     }
   }
 }
