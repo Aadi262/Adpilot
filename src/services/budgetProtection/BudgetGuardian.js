@@ -150,7 +150,8 @@ class BudgetGuardian {
         }
         return null;
       }
-      case 'ctr_drop': {
+      case 'ctr_drop':
+      case 'ctr_collapse': {
         const ctr = perf.ctr ?? null;
         if (ctr === null) return null;
         if (ctr < threshold) {
@@ -166,7 +167,8 @@ class BudgetGuardian {
         }
         return null;
       }
-      case 'spend_limit': {
+      case 'spend_limit':
+      case 'budget_bleed': {
         const spend = perf.spend ?? 0;
         if (spend > threshold) {
           return { currentValue: spend, delta: spend - threshold };
@@ -247,10 +249,12 @@ class BudgetGuardian {
       case 'roas_drop':
         return `${campaign.name} ROAS dropped to ${val.toFixed(2)}x — below your threshold of ${rule.threshold}x`;
       case 'ctr_drop':
+      case 'ctr_collapse':
         return `${campaign.name} CTR fell to ${val.toFixed(2)}% — below your threshold of ${rule.threshold}%`;
       case 'cpa_spike':
         return `${campaign.name} CPA spiked to ${val.toFixed(2)} — above your limit of ${rule.threshold}`;
       case 'spend_limit':
+      case 'budget_bleed':
         return `${campaign.name} spend reached ${val.toFixed(0)} — above your limit of ${rule.threshold}`;
       default:
         return `${campaign.name} triggered ${rule.alertType} alert`;

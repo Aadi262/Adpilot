@@ -3,6 +3,7 @@
 const express = require('express');
 const { authenticate, requireRole } = require('../middleware/auth');
 const ctrl = require('../controllers/budgetProtectionController');
+const analyzerCtrl = require('../controllers/budgetAnalyzerController');
 
 const router = express.Router();
 router.use(authenticate);
@@ -15,6 +16,7 @@ router.delete('/alerts/:id',    requireRole('admin', 'manager'), ctrl.deleteAler
 
 // Real scan using BudgetGuardian
 router.get('/scan', ctrl.scan);
+router.get('/analyzer', analyzerCtrl.getAnalyzer);
 
 // Per-campaign health analysis
 router.get('/campaign/:id', ctrl.analyzeCampaign);

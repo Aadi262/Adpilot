@@ -333,6 +333,26 @@ Frontend: React 18 / Vite / Tailwind / React Query / Zustand / Recharts.
 - Live Market Research run for `https://example.com` returned the new dossier fields, including `sourceMatrix`, `evidenceLog`, `dataGaps`, `siteSurfaces`, and `companySnapshot`.
 - This confirms the Research Hub dossier layer is not only implemented locally; it is running on production now.
 
+### Session Update — March 12, 2026 (Phase 7: Live Campaign Analyzer Foundation)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Analyzer architecture split | ✅ | Added `CampaignIntelligenceRepository`, `CampaignSignalService`, `LiveCampaignAnalyzerService`, and `budgetAnalyzerController` so Sentinel now has a dedicated controller → service → repository path for campaign analysis |
+| Cached analyzer endpoint | ✅ | Added `/api/v1/budget-ai/analyzer` with Redis-backed caching so the page can load a richer operator view without recalculating every panel on each request |
+| Peer-baseline risk detection | ✅ | Campaign dossiers now use real stored metrics plus team peer baselines for ROAS, CTR, CPA, spend, and pacing instead of template copy or hardcoded history |
+| Evidence-backed operator actions | ✅ | Each campaign now returns deterministic health scoring, evidence log, active protection rules, data gaps, and recommended actions like pause, budget trim, creative refresh, or tracking review |
+| Sentinel UI dossier pass | ✅ | Budget Protection page now includes a Live Campaign Analyzer section with collapsible campaign dossiers, operator feed, pacing cards, evidence/signals, action blocks, and team-level data gaps while keeping the existing visual language |
+| Budget report export upgrade | ✅ | Sentinel export now includes analyzer summary, operator feed, and campaign dossier tables instead of only the legacy alert-rule list |
+| Rule-name alignment fix | ✅ | `BudgetGuardian` now evaluates both legacy rule names (`ctr_drop`, `spend_limit`) and live UI/controller names (`ctr_collapse`, `budget_bleed`) so alerts do not silently fail due to naming drift |
+
+**Local verification:**
+- Module-load checks passed for the new campaign analyzer repository/service/controller path and updated `BudgetGuardian`.
+- `npm run build` passed after the Sentinel UI and analyzer changes.
+
+**Open verification note:**
+- A local runtime analyzer fetch was blocked because Postgres was not running on `localhost:5432` in the current shell, so this phase is implemented and build-verified locally but not yet deployed to VPS.
+- Next step is commit → push → VPS deploy → live verification on `194.163.146.149:3001` after approval.
+
 ### Phase C — Complete UI/UX Polish ✅ Complete
 
 **Built this session:**

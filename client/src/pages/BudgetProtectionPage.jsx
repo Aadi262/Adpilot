@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ShieldAlert, AlertTriangle, CheckCircle2, Plus, Trash2, ToggleLeft, ToggleRight,
-  Zap, Bell, TrendingDown, RefreshCw, X, Clock, Download,
+  Zap, Bell, TrendingDown, RefreshCw, X, Clock, Download, ChevronDown, ChevronUp, Activity, Gauge,
 } from 'lucide-react';
 import { downloadMarkdownReport } from '../lib/exportReport';
 import api from '../lib/api';
@@ -39,6 +39,27 @@ const SEVERITY_STYLES = {
   critical: 'bg-red-500/10 border-red-500/30 text-red-400',
   warning:  'bg-yellow-500/10 border-yellow-500/30 text-yellow-400',
   info:     'bg-blue-500/10 border-blue-500/30 text-blue-400',
+};
+
+const HEALTH_STYLES = {
+  critical: {
+    chip: 'bg-red-500/10 text-red-300 border border-red-500/20',
+    ring: 'border-red-500/30',
+    icon: AlertTriangle,
+    iconClass: 'text-red-400',
+  },
+  warning: {
+    chip: 'bg-yellow-500/10 text-yellow-300 border border-yellow-500/20',
+    ring: 'border-yellow-500/30',
+    icon: Gauge,
+    iconClass: 'text-yellow-400',
+  },
+  healthy: {
+    chip: 'bg-green-500/10 text-green-300 border border-green-500/20',
+    ring: 'border-green-500/30',
+    icon: CheckCircle2,
+    iconClass: 'text-accent-green',
+  },
 };
 
 // ─── Add Alert Rule Modal ─────────────────────────────────────────────────────
@@ -168,11 +189,164 @@ function AlertCard({ alert, onApplyFix }) {
   );
 }
 
+function CampaignDossierCard({ campaign, isExpanded, onToggle, onApplyFix }) {
+  const healthStyle = HEALTH_STYLES[campaign.health?.level] ?? HEALTH_STYLES.healthy;
+  const HealthIcon = healthStyle.icon;
+
+  return (
+    <div className={`card border ${healthStyle.ring}`}>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full text-left"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-sm font-semibold text-text-primary truncate">{campaign.name}</p>
+              <Badge status={campaign.platform} />
+              <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${healthStyle.chip}`}>
+                {campaign.health?.label ?? 'Stable'}
+              </span>
+            </div>
+            <p className="text-xs text-text-secondary mt-1">
+              Spend ${campaign.metrics?.spend?.toFixed?.(2) ?? '0.00'} of ${campaign.metrics?.budget?.toFixed?.(2) ?? '0.00'} •
+              ROAS {campaign.metrics?.roas ?? 0}x •
+              CTR {campaign.metrics?.ctr ?? 0}% •
+              Pacing {campaign.pacing?.status ?? 'on-pace'}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="text-right">
+              <p className="text-[10px] uppercase tracking-wider text-text-secondary">Health</p>
+              <div className="flex items-center gap-1.5 justify-end">
+                <HealthIcon className={`w-4 h-4 ${healthStyle.iconClass}`} />
+                <span className="text-sm font-bold text-text-primary">{campaign.health?.score ?? 0}/100</span>
+              </div>
+            </div>
+            {isExpanded ? <ChevronUp className="w-4 h-4 text-text-secondary" /> : <ChevronDown className="w-4 h-4 text-text-secondary" />}
+          </div>
+        </div>
+      </button>
+
+      {isExpanded && (
+        <div className="mt-4 space-y-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="rounded-xl border border-border bg-bg p-3">
+              <p className="text-[11px] text-text-secondary">Projected Spend</p>
+              <p className="text-base font-semibold text-text-primary">${campaign.pacing?.projectedDailySpend?.toFixed?.(2) ?? '0.00'}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-bg p-3">
+              <p className="text-[11px] text-text-secondary">Budget Utilization</p>
+              <p className="text-base font-semibold text-text-primary">{campaign.metrics?.utilization ?? 0}%</p>
+            </div>
+            <div className="rounded-xl border border-border bg-bg p-3">
+              <p className="text-[11px] text-text-secondary">CPA</p>
+              <p className="text-base font-semibold text-text-primary">{campaign.metrics?.cpa ? `$${campaign.metrics.cpa}` : 'Unavailable'}</p>
+            </div>
+            <div className="rounded-xl border border-border bg-bg p-3">
+              <p className="text-[11px] text-text-secondary">Active Rules</p>
+              <p className="text-base font-semibold text-text-primary">{campaign.protectionState?.activeRules ?? 0}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-4">
+            <div className="space-y-4">
+              <div className="rounded-xl border border-border bg-bg p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Activity className="w-4 h-4 text-accent-blue" />
+                  <h3 className="text-sm font-semibold text-text-primary">Evidence & Signals</h3>
+                </div>
+                {campaign.signals?.length ? (
+                  <div className="space-y-2.5">
+                    {campaign.signals.map((signal, idx) => (
+                      <div key={`${campaign.id}-signal-${idx}`} className={`rounded-lg border px-3 py-2 ${SEVERITY_STYLES[signal.severity] ?? SEVERITY_STYLES.info}`}>
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs font-semibold uppercase tracking-wider">{signal.metric}</p>
+                          <span className="text-[10px] uppercase tracking-wider opacity-80">{signal.source?.replace(/_/g, ' ')}</span>
+                        </div>
+                        <p className="text-sm font-semibold mt-1 text-text-primary">{signal.title}</p>
+                        <p className="text-xs text-text-secondary mt-1">{signal.reason}</p>
+                        <p className="text-[11px] mt-1 italic opacity-90">{signal.evidence}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-text-secondary">No urgent efficiency or pacing issues were detected for this campaign.</p>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-border bg-bg p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Clock className="w-4 h-4 text-orange-400" />
+                  <h3 className="text-sm font-semibold text-text-primary">Operator Log</h3>
+                </div>
+                <div className="space-y-2">
+                  {(campaign.evidenceLog || []).map((item, idx) => (
+                    <div key={`${campaign.id}-evidence-${idx}`} className="text-sm text-text-secondary flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-accent-blue mt-2 shrink-0" />
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="rounded-xl border border-border bg-bg p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Zap className="w-4 h-4 text-accent-green" />
+                  <h3 className="text-sm font-semibold text-text-primary">Recommended Actions</h3>
+                </div>
+                <div className="space-y-2.5">
+                  {(campaign.recommendedActions || []).map((action, idx) => (
+                    <div key={`${campaign.id}-action-${idx}`} className="rounded-lg border border-border px-3 py-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-medium text-text-primary">{action.label}</p>
+                        <span className="text-[10px] uppercase tracking-wider text-text-secondary">{action.priority}</span>
+                      </div>
+                      <p className="text-xs text-text-secondary mt-1">{action.reason}</p>
+                      {action.type === 'pause' && (
+                        <button
+                          onClick={() => onApplyFix(campaign.id)}
+                          className="mt-2 text-xs px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-300 transition-colors font-medium"
+                        >
+                          Apply Fix — Pause Campaign
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {campaign.dataGaps?.length > 0 && (
+                <div className="rounded-xl border border-border bg-bg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertTriangle className="w-4 h-4 text-yellow-400" />
+                    <h3 className="text-sm font-semibold text-text-primary">Data Gaps</h3>
+                  </div>
+                  <div className="space-y-2">
+                    {campaign.dataGaps.map((gap, idx) => (
+                      <p key={`${campaign.id}-gap-${idx}`} className="text-xs text-text-secondary">{gap}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function BudgetProtectionPage() {
   const toast        = useToast();
   const queryClient  = useQueryClient();
   const [showModal, setShowModal] = useState(false);
+  const [expandedCampaignId, setExpandedCampaignId] = useState(null);
 
   const { data: alertsData, isLoading: loadingAlerts } = useQuery({
     queryKey: ['budget-ai', 'alerts'],
@@ -182,6 +356,16 @@ export default function BudgetProtectionPage() {
   const { data: scanData, isLoading: scanning, refetch: runScan } = useQuery({
     queryKey: ['budget-ai', 'scan'],
     queryFn:  () => api.get('/budget-ai/scan').then((r) => r.data.data),
+    staleTime: 60_000,
+  });
+
+  const {
+    data: analyzerData,
+    isLoading: loadingAnalyzer,
+    refetch: refetchAnalyzer,
+  } = useQuery({
+    queryKey: ['budget-ai', 'analyzer'],
+    queryFn: () => api.get('/budget-ai/analyzer').then((r) => r.data.data),
     staleTime: 60_000,
   });
 
@@ -219,6 +403,7 @@ export default function BudgetProtectionPage() {
       queryClient.invalidateQueries({ queryKey: ['campaigns'] });
       queryClient.invalidateQueries({ queryKey: ['budget-ai', 'alerts'] });
       queryClient.invalidateQueries({ queryKey: ['budget-ai', 'scan'] });
+      queryClient.invalidateQueries({ queryKey: ['budget-ai', 'analyzer'] });
       toast.success('Campaign paused successfully');
     },
     onError: () => toast.error('Failed to pause campaign'),
@@ -230,6 +415,10 @@ export default function BudgetProtectionPage() {
   const status      = scan?.status ?? 'healthy';
   const summary     = scan?.summary;
   const anomalies   = scan?.anomalies ?? [];
+  const analyzerSummary = analyzerData?.summary;
+  const analyzerCampaigns = analyzerData?.campaigns ?? [];
+  const globalAnalyzerGaps = analyzerData?.dataGaps ?? [];
+  const operatorFeed = analyzerData?.operatorFeed ?? [];
 
   const statusBanner = status === 'critical'
     ? { bg: 'bg-red-500/10 border-red-500/30', icon: AlertTriangle, iconClass: 'text-red-400', text: `Critical: ${alertCount} campaign${alertCount !== 1 ? 's' : ''} bleeding budget`, textClass: 'text-red-300' }
@@ -254,7 +443,9 @@ export default function BudgetProtectionPage() {
         actions={[
           {
             label: scanning ? 'Scanning…' : 'Scan Now',
-            onClick: () => runScan(),
+            onClick: async () => {
+              await Promise.all([runScan(), refetchAnalyzer()]);
+            },
             disabled: scanning,
             variant: 'primary',
             icon: RefreshCw,
@@ -267,8 +458,8 @@ export default function BudgetProtectionPage() {
         <div className={`border rounded-xl px-5 py-3.5 flex items-center gap-3 ${statusBanner.bg} ${status === 'critical' ? 'sentinel-pulse' : ''}`}>
           <statusBanner.icon className={`w-5 h-5 ${statusBanner.iconClass}`} />
           <span className={`text-sm font-semibold ${statusBanner.textClass}`}>{statusBanner.text}</span>
-          {scan.campaignsScanned != null && (
-            <span className="ml-auto text-xs text-text-secondary">{scan.campaignsScanned} campaigns scanned</span>
+          {(scan.campaignCount != null || scan.campaignsScanned != null) && (
+            <span className="ml-auto text-xs text-text-secondary">{scan.campaignCount ?? scan.campaignsScanned} campaigns scanned</span>
           )}
         </div>
       )}
@@ -293,6 +484,111 @@ export default function BudgetProtectionPage() {
           </div>
         </div>
       )}
+
+      <div className="card p-0 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <div>
+            <h2 className="text-sm font-semibold text-text-primary">Live Campaign Analyzer</h2>
+            <p className="text-xs text-text-secondary mt-1">Operator-grade dossiers for every campaign with pacing, evidence, and recommended actions.</p>
+          </div>
+          {analyzerSummary && (
+            <div className="text-right">
+              <p className="text-[11px] uppercase tracking-wider text-text-secondary">At-Risk Budget</p>
+              <p className="text-sm font-semibold text-text-primary">${Number(analyzerSummary.atRiskBudget || 0).toFixed(2)}</p>
+            </div>
+          )}
+        </div>
+
+        {loadingAnalyzer ? (
+          <div className="p-5 space-y-3">
+            {[...Array(3)].map((_, i) => <div key={i} className="skeleton h-28 rounded-xl" />)}
+          </div>
+        ) : analyzerCampaigns.length === 0 ? (
+          <EmptyState
+            icon={Activity}
+            title="No campaigns available to analyze"
+            description="Create or activate campaigns to unlock live pacing, risk scoring, and recommended operator actions."
+            color="blue"
+            compact
+          />
+        ) : (
+          <div className="p-5 space-y-4">
+            {analyzerSummary && (
+              <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
+                <div className="rounded-xl border border-border bg-bg p-3">
+                  <p className="text-[11px] text-text-secondary">Active Campaigns</p>
+                  <p className="text-base font-semibold text-text-primary">{analyzerSummary.activeCampaigns}</p>
+                </div>
+                <div className="rounded-xl border border-border bg-bg p-3">
+                  <p className="text-[11px] text-text-secondary">Critical</p>
+                  <p className="text-base font-semibold text-red-300">{analyzerSummary.criticalCampaigns}</p>
+                </div>
+                <div className="rounded-xl border border-border bg-bg p-3">
+                  <p className="text-[11px] text-text-secondary">Warnings</p>
+                  <p className="text-base font-semibold text-yellow-300">{analyzerSummary.warningCampaigns}</p>
+                </div>
+                <div className="rounded-xl border border-border bg-bg p-3">
+                  <p className="text-[11px] text-text-secondary">Protected Budget</p>
+                  <p className="text-base font-semibold text-text-primary">${Number(analyzerSummary.protectedBudget || 0).toFixed(2)}</p>
+                </div>
+                <div className="rounded-xl border border-border bg-bg p-3">
+                  <p className="text-[11px] text-text-secondary">Utilization</p>
+                  <p className="text-base font-semibold text-text-primary">{analyzerSummary.utilization ?? 0}%</p>
+                </div>
+              </div>
+            )}
+
+            {operatorFeed.length > 0 && (
+              <div className="rounded-xl border border-border bg-bg p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Zap className="w-4 h-4 text-orange-400" />
+                  <h3 className="text-sm font-semibold text-text-primary">Operator Feed</h3>
+                </div>
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-2.5">
+                  {operatorFeed.slice(0, 6).map((item, idx) => (
+                    <div key={`${item.campaignId}-${idx}`} className="rounded-lg border border-border px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-text-primary">{item.label}</p>
+                        <Badge status={item.platform} />
+                      </div>
+                      <p className="text-xs text-text-secondary mt-1">{item.campaignName}</p>
+                      <p className="text-xs text-text-secondary mt-1">{item.reason}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-3">
+              {analyzerCampaigns.map((campaign) => (
+                <CampaignDossierCard
+                  key={campaign.id}
+                  campaign={campaign}
+                  isExpanded={expandedCampaignId === campaign.id}
+                  onToggle={() => setExpandedCampaignId((current) => current === campaign.id ? null : campaign.id)}
+                  onApplyFix={(campaignId) => applyFixMutation.mutate(campaignId)}
+                />
+              ))}
+            </div>
+
+            {globalAnalyzerGaps.length > 0 && (
+              <div className="rounded-xl border border-border bg-bg p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className="w-4 h-4 text-yellow-400" />
+                  <h3 className="text-sm font-semibold text-text-primary">Team-Level Data Gaps</h3>
+                </div>
+                <div className="space-y-2">
+                  {globalAnalyzerGaps.map((gap, idx) => (
+                    <p key={`global-gap-${idx}`} className="text-xs text-text-secondary">
+                      {gap.message} ({gap.campaignsAffected} campaign{gap.campaignsAffected !== 1 ? 's' : ''})
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {anomalies.length > 0 && (
         <div className="card">
@@ -353,9 +649,49 @@ export default function BudgetProtectionPage() {
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h2 className="text-sm font-semibold text-text-primary">Alert Rules</h2>
           <div className="flex items-center gap-2">
-            {rules.length > 0 && (
+            {(rules.length > 0 || analyzerCampaigns.length > 0) && (
               <button
                 onClick={() => downloadMarkdownReport('Budget Protection Report', [
+                  analyzerSummary ? {
+                    title: 'Live Campaign Analyzer',
+                    items: [
+                      `Active campaigns: ${analyzerSummary.activeCampaigns}`,
+                      `Critical campaigns: ${analyzerSummary.criticalCampaigns}`,
+                      `Warning campaigns: ${analyzerSummary.warningCampaigns}`,
+                      `Protected budget: $${analyzerSummary.protectedBudget}`,
+                      `At-risk budget: $${analyzerSummary.atRiskBudget}`,
+                      `Budget utilization: ${analyzerSummary.utilization}%`,
+                    ],
+                  } : null,
+                  operatorFeed.length ? {
+                    title: 'Operator Feed',
+                    table: {
+                      headers: ['Campaign', 'Action', 'Priority', 'Automatable', 'Reason'],
+                      rows: operatorFeed.slice(0, 10).map((item) => [
+                        item.campaignName,
+                        item.label,
+                        item.priority,
+                        item.automatable ? 'Yes' : 'No',
+                        item.reason,
+                      ]),
+                    },
+                  } : null,
+                  analyzerCampaigns.length ? {
+                    title: 'Campaign Dossiers',
+                    table: {
+                      headers: ['Campaign', 'Health', 'Spend', 'Budget', 'ROAS', 'CTR', 'CPA', 'Pacing'],
+                      rows: analyzerCampaigns.map((campaign) => [
+                        campaign.name,
+                        `${campaign.health?.score ?? 0}/100 ${campaign.health?.label ?? 'Stable'}`,
+                        campaign.metrics?.spend ?? 0,
+                        campaign.metrics?.budget ?? 0,
+                        campaign.metrics?.roas ?? 0,
+                        campaign.metrics?.ctr ?? 0,
+                        campaign.metrics?.cpa ?? 0,
+                        campaign.pacing?.status ?? 'on-pace',
+                      ]),
+                    },
+                  } : null,
                   {
                     title: 'Scan Summary',
                     items: [
@@ -380,7 +716,7 @@ export default function BudgetProtectionPage() {
                       ]),
                     },
                   },
-                ], 'budget-protection-report')}
+                ].filter(Boolean), 'budget-protection-report')}
                 className="btn-secondary text-xs flex items-center gap-1.5 py-1.5 px-2"
               >
                 <Download className="w-3.5 h-3.5" />Report
