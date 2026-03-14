@@ -786,29 +786,32 @@ Production Deploy:          ░░░░░░░░░░    0%
 
 ## 6. Next Actions
 
-### Phase R — V2 Intelligence Engine Overhaul (Session 1: Crash Hardening) ⏳ In Progress (2026-03-10)
+### Phase R — V2 Intelligence Engine Overhaul ✅ Complete (2026-03-15)
 
-**Completed this session:**
-- SEO executive summaries now use Gemini instead of Anthropic via `src/services/seo/SeoSummaryService.js`, matching the current AI architecture rule.
-- Added `POST /api/v1/seo/audit/:id/regenerate-summary` in `src/controllers/seoController.js` + `src/routes/seoRoutes.js` so the frontend can retry missing summaries without rerunning the full audit.
-- Beacon UI (`client/src/pages/SeoPage.jsx`) now shows a proper fallback card when a completed audit has no executive summary, plus a Retry Summary button.
-- Market Research (`client/src/pages/ResearchPage.jsx`) now shows visible progress steps, spinner state, inline error state, and auto-scrolls to results after success.
-- Error normalization improved in `src/middleware/errorHandler.js` so provider/env failures return operational JSON messages instead of a generic "Internal server error" where possible.
-- Added `AppError.serviceUnavailable()` in `src/common/AppError.js` for provider/configuration failures.
-- Deployment env visibility improved: `src/controllers/integrationController.js` now reports missing `GEMINI_API_KEY` and `VALUESERP_API_KEY`; `src/config/env.js` validates both variables.
-- Fixed Budget Guardian schema mismatch: `CampaignAlert.campaignId` is now nullable in `prisma/schema.prisma` to match the controller/service logic for global alert rules.
-- Regenerated Prisma Client after the schema change.
+**Session 1 (2026-03-10):**
+- SEO executive summaries now use Gemini instead of Anthropic via `src/services/seo/SeoSummaryService.js`
+- Added `POST /api/v1/seo/audit/:id/regenerate-summary` (retry summary without re-running audit)
+- SeoPage shows fallback card + Retry Summary button when audit has no summary
+- Market Research shows progress steps, spinner, inline error, auto-scroll to results
+- Error normalization improved (`AppError.serviceUnavailable()` for provider/config failures)
+- Fixed Budget Guardian schema: `CampaignAlert.campaignId` now nullable
 
-**Verification this session:**
-- `npx prisma generate` ✅
-- `npm run build` ✅
-- Backend module load check for touched files ✅
-- `npm test -- --runInBand` returned "No tests found" (repo currently has no Jest test suite)
+**Session 2 (2026-03-15) — Signal Adapters + Provider Hardening:**
+- New: `src/services/research/adapters/IntentSignalAdapter.js` — commercial/informational/product/enterprise intent scoring, funnel-stage classification, Redis-cached 30min
+- New: `src/services/research/adapters/TechStackSignalAdapter.js` — 31 tech patterns detected from scripts/inlineScripts, structured data signals, Redis-cached 6hr
+- New: `src/services/research/adapters/TrafficSignalAdapter.js` — Cloudflare Radar + Similarweb DigitalRank, provider-aware graceful degradation, Redis-cached 30min
+- `CompetitorAnalyzer.js`: calls all 3 adapters in parallel; adds trafficSignals, techSignals, intentSignals to crawl output
+- `CompetitorHijackService.js`: passes all 3 signals through all result modes; Gemini-first AI chain (was Anthropic-only); traffic/intent gaps reported in dataGaps[]
+- `env.js`: added CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, SIMILARWEB_API_KEY validation
+- `errorHandler.js`: normalizes rate-limit + DB connection errors to clean 503 responses
+- `budgetProtectionController.js`: renamed alert types (ctr_drop→ctr_collapse, spend_limit→budget_bleed)
+- **Provider priority standardized** across all AI paths to: Ollama → Gemini → HuggingFace → Anthropic
+  - `ContentBriefService.generate()` — was Anthropic-only
+  - `KeywordResearchService.aiInsights()` — was Anthropic-only, now Gemini → Anthropic
+  - `adService.generateAdWithAI()` — was Anthropic → Gemini → Ollama
+- `ResearchPage.jsx`: Reach Signals panel (rank + confidence + provider pills), Intent Signals panel (primary/secondary intent + funnel stage + evidence), Tech Stack Signals panel (technologies + category counts) — shown in both Market Research and Ad Intel tabs
 
-**Remaining in Phase R:**
-- Replace remaining Anthropic/OpenAI-first AI paths with Gemini-first/provider-safe flows (Forge, briefs, keyword analysis, competitor research).
-- Improve VPS diagnostics further by exposing summary/provider failure reasons in the UI where useful.
-- Continue Session 2 work: real ValueSERP-backed keyword research + SERP-informed content briefs.
+**Commit:** `ceea2252`
 
 ### Phase M — API Verification + Bug Fixes ✅ Complete (2026-03-06)
 
