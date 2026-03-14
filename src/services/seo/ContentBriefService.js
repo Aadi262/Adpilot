@@ -27,8 +27,7 @@ const SEARCH_INTENTS = ['informational', 'commercial', 'transactional', 'navigat
 class ContentBriefService {
   /**
    * Generate a content brief for a target keyword.
-   * Uses OpenAI gpt-4o-mini if OPENAI_API_KEY is set; otherwise falls back to
-   * the deterministic TF-IDF algorithm.
+   * AI chain: Ollama (local) → Gemini (free) → HuggingFace (free) → Anthropic (paid) → deterministic fallback.
    *
    * @param {string} teamId
    * @param {string} targetKeyword
@@ -41,7 +40,19 @@ class ContentBriefService {
     const teamContext = await teamContextService.getKeywordContext(teamId, targetKeyword);
     let aiResult = null;
 
-    // 1. Anthropic Claude (preferred because current VPS env is working here)
+    // 1. Ollama (local, free, fastest — zero cost)
+    if (!aiResult && ollama.isAvailable) {
+      aiResult = await this._generateWithOllama(teamId, targetKeyword, serpContext);
+    }
+    // 2. Gemini (free tier)
+    if (!aiResult && gemini.isAvailable) {
+      aiResult = await this._generateWithGemini(teamId, targetKeyword, serpContext, teamContext);
+    }
+    // 3. HuggingFace (free, slower)
+    if (!aiResult && huggingface.isAvailable) {
+      aiResult = await this._generateWithHuggingFace(teamId, targetKeyword);
+    }
+    // 4. Anthropic Claude (paid fallback)
     if (!aiResult && anthropic.isAvailable) {
       aiResult = await this._generateWithAnthropic(teamId, targetKeyword, serpContext, teamContext);
     }

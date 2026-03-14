@@ -114,27 +114,27 @@ async function generateAdWithAI(campaignId, brief, teamId) {
     } catch { return null; }
   };
 
-  // 1. Try Anthropic Claude first (most reliable, has key)
-  if (anthropic.isAvailable) {
-    const result = await tryProvider('anthropic', () => anthropic.generateAds(adParams));
-    if (result) return result;
-  }
-
-  // 2. Try Gemini (free key)
-  if (gemini.isAvailable) {
-    const result = await tryProvider('gemini', () => gemini.generateAds(adParams));
-    if (result) return result;
-  }
-
-  // 3. Try Ollama (local — slow on first token, 8s timeout)
+  // 1. Try Ollama (local, free, zero cost)
   if (await ollama.isAvailable()) {
     const result = await tryProvider('ollama', () => ollama.generateAds(adParams));
     if (result) return result;
   }
 
-  // 4. Try HuggingFace (free key, Mistral-7B)
+  // 2. Try Gemini (free tier)
+  if (gemini.isAvailable) {
+    const result = await tryProvider('gemini', () => gemini.generateAds(adParams));
+    if (result) return result;
+  }
+
+  // 3. Try HuggingFace (free, Mistral-7B)
   if (huggingface.isAvailable) {
     const result = await tryProvider('huggingface', () => huggingface.generateAds(adParams));
+    if (result) return result;
+  }
+
+  // 4. Try Anthropic Claude (paid fallback)
+  if (anthropic.isAvailable) {
+    const result = await tryProvider('anthropic', () => anthropic.generateAds(adParams));
     if (result) return result;
   }
 

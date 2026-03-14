@@ -149,6 +149,18 @@ Rules:
 - Use the team memory above to avoid repeating stale priorities and to connect this keyword to what the team already tracks.
 - Return valid JSON only.`;
 
+  // 1. Gemini (free tier — try first)
+  if (gemini.isAvailable) {
+    try {
+      const raw = await gemini.generate(prompt, { maxTokens: 900, temperature: 0.1 });
+      const parsed = gemini.parseJSON(raw);
+      if (parsed && parsed.trendScore !== undefined) return parsed;
+    } catch {
+      // fall through
+    }
+  }
+
+  // 2. Anthropic Claude (paid fallback)
   try {
     if (!anthropic.isAvailable) return null;
     return await anthropic.generateJSON(prompt, {

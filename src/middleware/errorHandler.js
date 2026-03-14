@@ -19,6 +19,14 @@ function normalizeUnexpectedError(err) {
     return AppError.serviceUnavailable('The AI provider returned an invalid response. Please try again.');
   }
 
+  if (/overloaded|rate.limit|too many requests|quota exceeded/i.test(message)) {
+    return AppError.serviceUnavailable('The AI service is temporarily overloaded. Please try again in a moment.');
+  }
+
+  if (/prisma.*timed?\s*out|connection.*pool|prepared statement|P1001|P1002|P1008|P1017/i.test(message)) {
+    return AppError.serviceUnavailable('Database connection issue. Please try again.');
+  }
+
   return null;
 }
 

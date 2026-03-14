@@ -3,6 +3,7 @@
 const logger             = require('../../config/logger');
 const AppError           = require('../../common/AppError');
 const CompetitorAnalyzer = require('./CompetitorAnalyzer');
+const gemini             = require('./GeminiService');
 const anthropic          = require('./AnthropicService');
 const teamContextService = require('./TeamContextService');
 const serpIntelligence   = require('../seo/SerpIntelligenceService');
@@ -56,7 +57,15 @@ class CompetitorHijackService {
         teamMemory:  teamContextService.formatCompetitorContext(teamContext),
       };
 
-      if (anthropic.isAvailable) {
+      // Try Gemini first (free), then Anthropic (paid fallback)
+      if (gemini.isAvailable) {
+        try {
+          aiInsights = await gemini.analyzeCompetitor(aiParams);
+        } catch {
+          aiInsights = null;
+        }
+      }
+      if (!aiInsights && anthropic.isAvailable) {
         aiInsights = await anthropic.analyzeCompetitor(aiParams);
       }
 
@@ -80,6 +89,9 @@ class CompetitorHijackService {
         siteSurfaces:      crawlData.siteSurfaces || {},
         contentFootprint:  crawlData.contentFootprint || {},
         companySnapshot:   crawlData.companySnapshot || {},
+        trafficSignals:    crawlData.trafficSignals || {},
+        techSignals:       crawlData.techSignals || {},
+        intentSignals:     crawlData.intentSignals || {},
         structuredDataTypes: crawlData.structuredDataTypes || [],
         robotsTxtPresent:  crawlData.robotsTxtPresent || false,
         sitemapPresent:    crawlData.sitemapPresent || false,
@@ -138,6 +150,7 @@ class CompetitorHijackService {
       ...baseResult,
       mode: 'overview',
       trafficEstimate: null,
+      trafficSignals: crawlData.trafficSignals || {},
       threatLevel: this._computeThreatLevel(topKeywords, crawlData),
       socialLinks: crawlData.socialLinks || [],
       structuredDataPresent: Boolean(crawlData?.structuredDataTypes?.length),
@@ -147,6 +160,8 @@ class CompetitorHijackService {
         description: crawlData.description || null,
       },
       companySnapshot: crawlData.companySnapshot || {},
+      intentSignals: crawlData.intentSignals || {},
+      techSignals: crawlData.techSignals || {},
       structuredDataTypes: crawlData.structuredDataTypes || [],
       siteSurfaces: crawlData.siteSurfaces || {},
       contentFootprint: {
@@ -180,6 +195,9 @@ class CompetitorHijackService {
       researchBasis,
       attackVectors,
       companySnapshot: crawlData.companySnapshot || {},
+      trafficSignals: crawlData.trafficSignals || {},
+      intentSignals: crawlData.intentSignals || {},
+      techSignals: crawlData.techSignals || {},
       technicalSignals: this._buildTechnicalSignals(crawlData),
       contentFootprint: crawlData.contentFootprint || {},
       siteSurfaces: crawlData.siteSurfaces || {},
@@ -293,6 +311,20 @@ class CompetitorHijackService {
         detail: `${crawlData.headings?.length || 0} headings, ${crawlData.ctas?.length || 0} CTAs, ${crawlData.internalLinks?.length || 0} internal URLs observed`,
       },
       {
+        source: 'traffic_signals',
+        status: crawlData.trafficSignals?.summary?.available ? 'ok' : 'unavailable',
+        detail: crawlData.trafficSignals?.summary?.available
+          ? `Best known popularity rank ${crawlData.trafficSignals.summary.bestKnownGlobalRank} with ${crawlData.trafficSignals.summary.confidence} confidence.`
+          : 'No live external popularity rank was available for this run.',
+      },
+      {
+        source: 'intent_signals',
+        status: crawlData.intentSignals?.summary?.primaryIntent ? 'ok' : 'unavailable',
+        detail: crawlData.intentSignals?.summary?.primaryIntent
+          ? `Primary intent ${crawlData.intentSignals.summary.primaryIntent}, funnel stage ${crawlData.intentSignals.summary.funnelStage}.`
+          : 'Intent signals could not be derived from the live crawl.',
+      },
+      {
         source: 'valueserp',
         status: serpEnrichment.providerStatus?.status || 'unavailable',
         detail: serpEnrichment.providerStatus?.message || 'ValueSERP was not used for this run',
@@ -322,6 +354,18 @@ class CompetitorHijackService {
 
     if (crawlData.companySnapshot?.positioning) {
       entries.push({ type: 'positioning', detail: crawlData.companySnapshot.positioning });
+    }
+    if (crawlData.intentSignals?.summary?.primaryIntent) {
+      entries.push({
+        type: 'intent',
+        detail: `Primary buyer intent is ${crawlData.intentSignals.summary.primaryIntent} at ${crawlData.intentSignals.summary.funnelStage}-funnel.`,
+      });
+    }
+    if (crawlData.trafficSignals?.summary?.bestKnownGlobalRank) {
+      entries.push({
+        type: 'traffic',
+        detail: `Observed external popularity rank ${crawlData.trafficSignals.summary.bestKnownGlobalRank} (${crawlData.trafficSignals.summary.confidence} confidence).`,
+      });
     }
     if (crawlData.heroHeading) {
       entries.push({ type: 'hero', detail: `Hero heading: "${crawlData.heroHeading}"` });
@@ -355,6 +399,7 @@ class CompetitorHijackService {
     const gaps = [];
     if (serpEnrichment.providerStatus?.degraded) gaps.push(serpEnrichment.providerStatus.message);
     if (serpEnrichment.fallbackStatus?.degraded) gaps.push(serpEnrichment.fallbackStatus.message);
+    if (!crawlData.trafficSignals?.summary?.available) gaps.push('External traffic/popularity rank was unavailable, so reach is inferred only from on-site evidence.');
     if (!crawlData.sitemapPresent) gaps.push('Sitemap could not be confirmed, so content coverage may be incomplete.');
     if (!crawlData.robotsTxtPresent) gaps.push('robots.txt could not be confirmed from the public site.');
     if (!aiInsights) gaps.push('Anthropic strategic synthesis was unavailable for this run.');

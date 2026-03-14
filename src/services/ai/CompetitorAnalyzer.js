@@ -1,6 +1,9 @@
 'use strict';
 
 const logger = require('../../config/logger');
+const trafficSignalAdapter = require('../research/adapters/TrafficSignalAdapter');
+const techStackSignalAdapter = require('../research/adapters/TechStackSignalAdapter');
+const intentSignalAdapter = require('../research/adapters/IntentSignalAdapter');
 
 // Tech stack patterns to detect from script URLs / page source
 const TECH_MAP = {
@@ -210,6 +213,26 @@ class CompetitorAnalyzer {
         headings: extracted.headings,
       });
       const contentFootprint = this._buildContentFootprint(siteSurfaces, internalLinks, extracted.headings);
+      const [trafficSignals, techSignals, intentSignals] = await Promise.all([
+        trafficSignalAdapter.analyze(domain),
+        techStackSignalAdapter.analyze({
+          domain,
+          scripts: extracted.scripts,
+          inlineScripts: extracted.inlineScripts,
+          structuredDataTypes,
+          internalLinks,
+        }),
+        intentSignalAdapter.analyze({
+          domain,
+          title: extracted.title,
+          description: extracted.description,
+          ctas: uniqueCtas,
+          headings: extracted.headings,
+          siteSurfaces,
+          internalLinks,
+          structuredDataTypes,
+        }),
+      ]);
 
       return {
         domain,
@@ -229,6 +252,9 @@ class CompetitorAnalyzer {
         contentFootprint,
         companySnapshot,
         structuredDataTypes,
+        trafficSignals,
+        techSignals,
+        intentSignals,
         robotsTxtPresent: crawlAssets.robotsTxtPresent,
         sitemapPresent: crawlAssets.sitemapPresent,
         sitemapUrlCount: crawlAssets.sitemapUrlCount,

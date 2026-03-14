@@ -64,15 +64,15 @@ function CompetitorSection() {
 
   return (
     <div className="space-y-4">
-      {/* Beta banner */}
+      {/* Early access banner */}
       <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
         <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
           <FlaskConical className="w-4 h-4 text-amber-400" />
         </div>
         <div>
-          <p className="text-sm font-semibold text-amber-400">Beta Feature</p>
+          <p className="text-sm font-semibold text-amber-400">Research Engine</p>
           <p className="text-xs text-white/40 mt-0.5">
-            Competitor intelligence is in early access. Data shown is illustrative. Full Meta Ad Library integration coming soon.
+            Live crawl, SERP, traffic, and intent signals are surfaced source-by-source. Missing premium APIs are shown as data gaps instead of fake confidence.
           </p>
         </div>
       </div>
@@ -231,6 +231,9 @@ function normalizeMarketResearchResult(data = {}) {
     topics: data.contentStrategy?.topics || [],
     companySnapshot: data.companySnapshot || {},
     technicalSignals: data.technicalSignals || {},
+    trafficSignals: data.trafficSignals || {},
+    techSignals: data.techSignals || {},
+    intentSignals: data.intentSignals || {},
     sourceMatrix: data.sourceMatrix || [],
     evidenceLog: data.evidenceLog || [],
     dataGaps: data.dataGaps || [],
@@ -251,6 +254,9 @@ function normalizeAdIntelResult(data = {}) {
     dataGaps: data.dataGaps || [],
     companySnapshot: data.companySnapshot || {},
     technicalSignals: data.technicalSignals || {},
+    trafficSignals: data.trafficSignals || {},
+    techSignals: data.techSignals || {},
+    intentSignals: data.intentSignals || {},
     contentFootprint: data.contentFootprint || {},
     siteSurfaces: data.siteSurfaces || {},
     socialLinks: data.socialLinks || [],
@@ -288,7 +294,14 @@ function SourcePill({ item }) {
 
   return (
     <div className={`rounded-xl border px-3 py-2 ${cls}`}>
-      <p className="text-[11px] font-semibold uppercase tracking-wider">{String(item?.source || 'source').replace(/_/g, ' ')}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wider">{String(item?.source || 'source').replace(/_/g, ' ')}</p>
+        {(item?.confidence || item?.freshness) && (
+          <span className="text-[10px] uppercase tracking-wider opacity-80">
+            {[item?.confidence, item?.freshness].filter(Boolean).join(' · ')}
+          </span>
+        )}
+      </div>
       <p className="text-xs mt-1 leading-relaxed">{item?.detail || item?.message || 'No detail available'}</p>
     </div>
   );
@@ -302,6 +315,22 @@ function DossierSection({ title, subtitle, children }) {
         {subtitle && <p className="text-xs text-text-secondary mt-1">{subtitle}</p>}
       </div>
       {children}
+    </div>
+  );
+}
+
+function SignalCard({ title, value, subtitle, tone = 'blue' }) {
+  const toneMap = {
+    blue: 'text-accent-blue',
+    green: 'text-accent-green',
+    amber: 'text-amber-400',
+    purple: 'text-accent-purple',
+  };
+  return (
+    <div className="rounded-xl border border-border px-3 py-2.5">
+      <p className="text-[11px] uppercase tracking-wider text-text-secondary">{title}</p>
+      <p className={`text-sm font-semibold mt-1 ${toneMap[tone] || toneMap.blue}`}>{value}</p>
+      {subtitle && <p className="text-[11px] text-text-secondary mt-1 leading-relaxed">{subtitle}</p>}
     </div>
   );
 }
@@ -504,6 +533,56 @@ function MarketResearchSection() {
                   )}
 
                   <div className="grid sm:grid-cols-2 gap-4">
+                    <DossierSection title="Reach Signals" subtitle="External popularity and scale hints">
+                      <div className="grid grid-cols-2 gap-2">
+                        <SignalCard
+                          title="Best Known Rank"
+                          value={savedResult.trafficSignals?.summary?.bestKnownGlobalRank ? `#${savedResult.trafficSignals.summary.bestKnownGlobalRank}` : 'Unavailable'}
+                          subtitle={savedResult.trafficSignals?.summary?.available ? `${savedResult.trafficSignals.summary.confidence} confidence` : 'No external rank provider available'}
+                          tone="blue"
+                        />
+                        <SignalCard
+                          title="Traffic Confidence"
+                          value={savedResult.trafficSignals?.summary?.confidence || 'low'}
+                          subtitle={savedResult.trafficSignals?.providers?.filter((item) => item.status === 'ok').length ? 'Provider-backed' : 'crawl-only fallback'}
+                          tone="amber"
+                        />
+                      </div>
+                      {(savedResult.trafficSignals?.providers || []).length > 0 && (
+                        <div className="grid gap-2">
+                          {savedResult.trafficSignals.providers.map((item) => (
+                            <SourcePill key={item.source} item={{ source: item.source, status: item.status, detail: item.message, confidence: item.confidence, freshness: item.freshness }} />
+                          ))}
+                        </div>
+                      )}
+                    </DossierSection>
+
+                    <DossierSection title="Intent Signals" subtitle="What kind of buyer journey the site is pushing">
+                      <div className="grid grid-cols-2 gap-2">
+                        <SignalCard
+                          title="Primary Intent"
+                          value={savedResult.intentSignals?.summary?.primaryIntent || 'Unavailable'}
+                          subtitle={savedResult.intentSignals?.summary?.funnelStage ? `${savedResult.intentSignals.summary.funnelStage}-funnel` : 'No funnel stage inferred'}
+                          tone="purple"
+                        />
+                        <SignalCard
+                          title="Secondary Intent"
+                          value={savedResult.intentSignals?.summary?.secondaryIntent || 'Unavailable'}
+                          subtitle={savedResult.intentSignals?.summary?.confidence ? `${savedResult.intentSignals.summary.confidence} confidence` : 'Confidence unavailable'}
+                          tone="green"
+                        />
+                      </div>
+                      {(savedResult.intentSignals?.evidence || []).length > 0 && (
+                        <div className="space-y-2">
+                          {savedResult.intentSignals.evidence.map((item, idx) => (
+                            <div key={idx} className="rounded-xl border border-border px-3 py-2 text-xs text-text-secondary">{item}</div>
+                          ))}
+                        </div>
+                      )}
+                    </DossierSection>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-4">
                     {savedResult.topKeywords.length > 0 && (
                       <DossierSection title="Keyword Footprint" subtitle="Observed search and on-site demand signals">
                         <div className="space-y-2">
@@ -547,6 +626,34 @@ function MarketResearchSection() {
                       )}
                     </DossierSection>
                   </div>
+
+                  {(savedResult.techSignals?.technologies?.length > 0 || savedResult.techStack?.length > 0) && (
+                    <DossierSection title="Tech Stack Signals" subtitle="Detected tooling, categories, and instrumentation">
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <p className="text-[11px] uppercase tracking-wider text-text-secondary">Detected Technologies</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {(savedResult.techSignals?.technologies || savedResult.techStack.map((name) => ({ name, category: 'detected', confidence: 'low' }))).slice(0, 16).map((item) => (
+                              <span key={item.name} className="text-[11px] px-2 py-1 rounded-full border border-border text-text-secondary">
+                                {item.name}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-[11px] uppercase tracking-wider text-text-secondary">Stack Categories</p>
+                          <div className="grid grid-cols-2 gap-2">
+                            {(savedResult.techSignals?.summary?.categories || []).slice(0, 6).map((item) => (
+                              <div key={item.category} className="rounded-xl border border-border px-3 py-2">
+                                <p className="text-xs text-text-secondary">{item.category}</p>
+                                <p className="text-sm text-text-primary font-semibold mt-1">{item.count}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </DossierSection>
+                  )}
 
                   <div className="grid sm:grid-cols-2 gap-4">
                     {savedResult.weaknesses.length > 0 && (
@@ -803,6 +910,42 @@ function AdIntelSection() {
                     </DossierSection>
                   )}
 
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <DossierSection title="Reach Signals" subtitle="How much external demand footprint we could confirm">
+                      <div className="grid grid-cols-2 gap-2">
+                        <SignalCard
+                          title="Best Known Rank"
+                          value={savedResult.trafficSignals?.summary?.bestKnownGlobalRank ? `#${savedResult.trafficSignals.summary.bestKnownGlobalRank}` : 'Unavailable'}
+                          subtitle={savedResult.trafficSignals?.summary?.available ? `${savedResult.trafficSignals.summary.confidence} confidence` : 'No premium rank feed configured'}
+                          tone="blue"
+                        />
+                        <SignalCard
+                          title="Traffic Confidence"
+                          value={savedResult.trafficSignals?.summary?.confidence || 'low'}
+                          subtitle={savedResult.trafficSignals?.providers?.filter((item) => item.status === 'ok').length ? 'External provider-backed' : 'Only on-site evidence available'}
+                          tone="amber"
+                        />
+                      </div>
+                    </DossierSection>
+
+                    <DossierSection title="Buyer Intent" subtitle="What intent the competitor is pushing hardest">
+                      <div className="grid grid-cols-2 gap-2">
+                        <SignalCard
+                          title="Primary Intent"
+                          value={savedResult.intentSignals?.summary?.primaryIntent || 'Unavailable'}
+                          subtitle={savedResult.intentSignals?.summary?.funnelStage ? `${savedResult.intentSignals.summary.funnelStage}-funnel` : 'No funnel stage inferred'}
+                          tone="purple"
+                        />
+                        <SignalCard
+                          title="Secondary Intent"
+                          value={savedResult.intentSignals?.summary?.secondaryIntent || 'Unavailable'}
+                          subtitle={savedResult.intentSignals?.summary?.confidence ? `${savedResult.intentSignals.summary.confidence} confidence` : 'Confidence unavailable'}
+                          tone="green"
+                        />
+                      </div>
+                    </DossierSection>
+                  </div>
+
                   {savedResult.researchBasis?.length > 0 && (
                     <DossierSection title="Research Basis" subtitle="Core observations behind the attack analysis">
                       <div className="space-y-2">
@@ -864,6 +1007,28 @@ function AdIntelSection() {
                             </div>
                           </div>
                         ))}
+                      </div>
+                    </DossierSection>
+                  )}
+
+                  {(savedResult.techSignals?.technologies?.length > 0 || savedResult.techStack?.length > 0) && (
+                    <DossierSection title="Tech Stack Signals" subtitle="Detected stack and instrumentation behind the funnel">
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        <div className="flex flex-wrap gap-1.5">
+                          {(savedResult.techSignals?.technologies || savedResult.techStack.map((name) => ({ name }))).slice(0, 16).map((item) => (
+                            <span key={item.name} className="text-[11px] px-2 py-1 rounded-full border border-border text-text-secondary">
+                              {item.name}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {(savedResult.techSignals?.summary?.categories || []).slice(0, 6).map((item) => (
+                            <div key={item.category} className="rounded-xl border border-border px-3 py-2">
+                              <p className="text-xs text-text-secondary">{item.category}</p>
+                              <p className="text-sm text-text-primary font-semibold mt-1">{item.count}</p>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </DossierSection>
                   )}

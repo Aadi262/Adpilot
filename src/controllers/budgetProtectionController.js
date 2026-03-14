@@ -36,7 +36,7 @@ exports.createAlert = async (req, res, next) => {
       throw AppError.badRequest('alertType, threshold, and action are required');
     }
 
-    const VALID_TYPES   = ['roas_drop', 'ctr_drop', 'cpa_spike', 'spend_limit'];
+    const VALID_TYPES   = ['roas_drop', 'ctr_collapse', 'cpa_spike', 'budget_bleed'];
     const VALID_ACTIONS = ['pause', 'notify', 'reduce_budget'];
 
     if (!VALID_TYPES.includes(alertType)) {
@@ -149,7 +149,6 @@ exports.applyFix = async (req, res, next) => {
         teamId:  req.user.teamId,
         userId:  req.user.userId,
         type:    'budget_ai_action',
-        title:   'Budget Protection Applied',
         message,
       },
     }).catch(() => {}); // non-blocking, ignore if notifications table missing fields
@@ -170,9 +169,9 @@ async function ensureDefaultRules(teamId) {
   await prisma.campaignAlert.createMany({
     data: [
       { teamId, campaignId: null, alertType: 'roas_drop', threshold: 1.5, action: 'notify' },
-      { teamId, campaignId: null, alertType: 'ctr_drop', threshold: 2.0, action: 'notify' },
+      { teamId, campaignId: null, alertType: 'ctr_collapse', threshold: 2.0, action: 'notify' },
       { teamId, campaignId: null, alertType: 'cpa_spike', threshold: 60, action: 'notify' },
-      { teamId, campaignId: null, alertType: 'spend_limit', threshold: 2500, action: 'notify' },
+      { teamId, campaignId: null, alertType: 'budget_bleed', threshold: 2500, action: 'notify' },
     ],
   }).catch(() => {});
 }
