@@ -10,26 +10,10 @@ let server;
 const PORT = config.port || process.env.PORT || 3000;
 const ENV  = config.nodeEnv || process.env.NODE_ENV || 'development';
 
-// ─── Safety net — log the actual error before exiting ─────────────────────
-// This catches anything that slips past our try/catch blocks and prints a
-// clear message rather than a silent crash. Keep this as early as possible.
-process.on('uncaughtException', (err) => {
-  logger.error('UNCAUGHT EXCEPTION — shutting down', {
-    name:    err.name,
-    message: err.message,
-    stack:   err.stack,
-  });
-  process.exit(1);
-});
-
-process.on('unhandledRejection', (reason) => {
-  logger.error('UNHANDLED PROMISE REJECTION — keeping process alive', {
-    reason: reason instanceof Error
-      ? { name: reason.name, message: reason.message, stack: reason.stack }
-      : String(reason),
-  });
-  // Don't exit — log and keep running.
-});
+// ─── Global error handlers are in src/config/logger.js ────────────────────
+// uncaughtException and unhandledRejection are registered there so every log
+// line gets the same pino format + ALS context. Do not add duplicate handlers
+// here — multiple handlers calling process.exit(1) causes confusion.
 
 // ─── Startup ──────────────────────────────────────────────────────────────
 async function start() {

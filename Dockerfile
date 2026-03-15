@@ -82,7 +82,7 @@ RUN node_modules/.bin/prisma generate
 
 # Cache-bust token — update this string to force Railway to re-copy src on next deploy
 # Format: YYYY-MM-DD-vN  (increment N each time you need to bust cache)
-RUN echo "src-cache-bust-2026-03-15-v1"
+RUN echo "src-cache-bust-2026-03-15-v2"
 
 # Copy backend source
 COPY src ./src/

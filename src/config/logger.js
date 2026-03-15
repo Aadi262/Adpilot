@@ -96,16 +96,18 @@ const logger = {
 };
 
 // ── Uncaught exception / rejection handlers ───────────────────────────────────
-// Replaces Winston's exceptionHandlers / rejectionHandlers
 process.on('uncaughtException', (err) => {
+  // Write directly to stderr FIRST — Railway/PaaS log viewers show this clearly
+  // even before pino formats the structured JSON output.
+  process.stderr.write(`[FATAL] Uncaught exception: ${err.message}\n${err.stack}\n`);
   logger.fatal('Uncaught exception', { err });
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason) => {
-  logger.error('Unhandled promise rejection', {
-    err: reason instanceof Error ? reason : new Error(String(reason)),
-  });
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  process.stderr.write(`[ERROR] Unhandled promise rejection: ${err.message}\n${err.stack}\n`);
+  logger.error('Unhandled promise rejection', { err });
 });
 
 module.exports = logger;
