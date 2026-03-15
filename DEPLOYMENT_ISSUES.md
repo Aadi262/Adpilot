@@ -1,0 +1,134 @@
+# AdPilot — Deployment Issues & Fixes
+
+A living document. Every time a deployment breaks, add the root cause and fix here.
+
+---
+
+## Issue #1 — Docker: App can't reach Postgres/Redis (localhost inside container)
+
+**Symptom:**
+```
+Database not ready yet (attempt N): Can't reach database server at `localhost:5432`
+```
+App container loops retrying DB connection and never starts.
+
+**Root cause:**
+`.env` has `DATABASE_URL=postgresql://...@localhost:...`. Inside a Docker container, `localhost` refers to the container itself — not the host machine or sibling services.
+
+**Fix:**
+In `docker-compose.yml`, override the URLs in the `environment:` block using Docker service names:
+```yaml
+adpilot-app:
+  env_file: .env
+  environment:
+    DATABASE_URL: postgresql://postgres:postgres@postgres:5432/adpilot
+    REDIS_URL: redis://redis:6379
+```
+This lets `.env` keep `localhost` URLs (for local `npm run dev`) while Docker uses service hostnames.
+
+**Rule:** Never rely on `.env` for DB/Redis URLs inside Docker. Always override in `docker-compose.yml`.
+
+---
+
+## Issue #2 — Railway: App crashes on startup ("Uncaught exception") after DB connects
+
+**Symptom:**
+```
+Database ready after 1 attempt(s)
+Sentry DSN not set — error reporting disabled
+EmailService: RESEND_API_KEY not set — emails will be logged only
+Uncaught exception
+```
+Railway healthcheck fails. Build succeeds. Container restarts in a loop.
+
+**Root cause:**
+`src/config/env.js` Joi validation throws on startup if:
+1. A newly added `Joi.string().uri()` field (e.g. `OLLAMA_URL`) is set to `""` (empty string) in Railway env — URI validator rejects empty strings without `.allow('')`
+2. A `Joi.boolean()` field (e.g. `SEO_ENGINE_V2`) receives string `"true"` from Railway — Railway always injects env vars as strings
+
+**Fix:**
+- Add `.optional().allow('')` to all URI validators for optional services:
+  ```js
+  OLLAMA_URL: Joi.string().optional().allow('').default('http://localhost:11434'),
+  ```
+- Use `Joi.alternatives()` for boolean flags that Railway sends as strings:
+  ```js
+  SEO_ENGINE_V2: Joi.alternatives().try(Joi.boolean(), Joi.string().allow('')).default(false),
+  ```
+
+**Rule:** Every time you add a new env var to `env.js`:
+- Optional services: always add `.optional().allow('')`
+- Boolean feature flags: use `Joi.alternatives()` not `Joi.boolean()` alone
+- URI fields for optional services: add `.optional().allow('')` before `.default()`
+
+---
+
+## Issue #3 — Railway healthcheck path mismatch
+
+**Symptom:**
+Railway shows "Attempt #N failed with service unavailable" during healthcheck, even though the app appears to start.
+
+**Root cause:**
+Railway's healthcheck is configured to hit `/health`. If the app registers its health route at a different path (e.g. `/api/v1/health`), healthchecks will always fail.
+
+**Current state:** ✅ OK — `src/app.js` mounts `healthRoutes` at `/health`. Railway checks `/health`.
+
+**Rule:** Never move or rename the `/health` route. Railway's healthcheck path is set in the Railway dashboard and cannot be changed per-deploy.
+
+---
+
+## Issue #4 — Duplicate Dockerfile (src/Dockerfile)
+
+**Symptom:**
+`src/Dockerfile` existed as a stale copy of the root `Dockerfile`, causing confusion about which one Docker uses.
+
+**Fix:** Deleted `src/Dockerfile`. Only the root `Dockerfile` is used by `docker-compose.yml` and Railway.
+
+**Rule:** One Dockerfile at the repo root. Never duplicate it.
+
+---
+
+## Deployment Checklist (run before every push)
+
+### Local Docker
+- [ ] `docker compose ps` — all 3 containers healthy
+- [ ] `curl http://localhost:3001/api/v1/health` — responds (even 401 = OK, app is running)
+- [ ] `docker logs adpilot-app --tail 20` — no crash loops
+
+### Railway
+- [ ] After push, watch Railway build logs — build must complete without error
+- [ ] Deploy logs must show: "Server started ✓", "Database connected ✓", "Queue processors registered ✓"
+- [ ] Healthcheck at `/health` must pass within 60s
+- [ ] Check Railway env vars include: `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`
+
+### VPS (Contabo — 194.163.146.140)
+```bash
+ssh root@194.163.146.140
+cd /path/to/adpilot
+git pull origin main
+docker compose down adpilot-app
+docker compose up -d --build adpilot-app
+docker logs adpilot-app --tail 30
+curl http://localhost:3001/api/v1/health
+```
+
+---
+
+## Environment Variables — What's Required Where
+
+| Variable | Local `.env` | Railway | VPS `.env` | Notes |
+|----------|-------------|---------|------------|-------|
+| `DATABASE_URL` | `localhost` URL | Auto-injected by Railway Postgres plugin | `postgres` service name | See Issue #1 |
+| `REDIS_URL` | `localhost` URL | Auto-injected by Railway Redis plugin | `redis` service name | See Issue #1 |
+| `JWT_SECRET` | dev value | **Must set manually** | **Must set manually** | Min 32 chars |
+| `JWT_REFRESH_SECRET` | dev value | **Must set manually** | **Must set manually** | Min 32 chars |
+| `ENCRYPTION_KEY` | 64 zeros (dev) | **Must set manually** | **Must set manually** | 64 hex chars |
+| `ALLOWED_ORIGINS` | `http://localhost:5173` | Your Vercel/frontend URL | Frontend URL | CORS |
+| `OLLAMA_URL` | `http://localhost:11434` | Leave blank (no Ollama on Railway) | Optional | Optional |
+| `SEO_ENGINE_V2` | `true` | `true` (string OK) | `true` | See Issue #2 |
+
+Generate secrets with:
+```bash
+openssl rand -hex 64   # JWT_SECRET / JWT_REFRESH_SECRET
+openssl rand -hex 32   # ENCRYPTION_KEY (produces 64 hex chars)
+```
