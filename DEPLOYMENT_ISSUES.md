@@ -76,14 +76,16 @@ All Dockerfile steps show `cached` in Railway build logs — including `COPY src
 Railway uses BuildKit inline cache. Sometimes its cache layer invalidation doesn't trigger even when source files change (timing or cache key issue).
 
 **Fix:**
-Add or update a comment in the Dockerfile stage that's before `COPY src`:
+There is a dedicated `RUN echo "src-cache-bust-..."` line immediately before `COPY src ./src/` in the Dockerfile. Update the version string to bust the cache:
 ```dockerfile
-# CACHE_BUST: 2026-03-15 — reason for bust
-FROM node:20-slim AS production
+# Change v1 → v2 to force Railway to re-copy src on next deploy
+RUN echo "src-cache-bust-2026-03-15-v2"
+COPY src ./src/
 ```
-Changing any line before a `COPY` step invalidates all subsequent layers.
 
-**Rule:** If Railway deploys show all steps as cached after a code change, update the `CACHE_BUST` comment date in the Dockerfile.
+**Rule:** Dockerfile **comments do NOT bust Docker cache** — Docker ignores them when computing layer cache keys. You must change an actual instruction. The `RUN echo` line exists specifically for this purpose. Increment `vN` when you need to force a fresh build.
+
+**NEVER use comments as cache busters — they do nothing.**
 
 ---
 
