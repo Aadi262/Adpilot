@@ -25,9 +25,9 @@ const schema = Joi.object({
   INVITE_BASE_URL:      Joi.string().uri().default('http://localhost:5173'),
 
   // ── SEO Engine ───────────────────────────────────────────────────────────
-  SEO_ENGINE_V2:        Joi.boolean().default(false),
-  LIGHTHOUSE_ENABLED:   Joi.boolean().default(false),
-  SEO_SUMMARY_ENABLED:  Joi.boolean().default(false),
+  SEO_ENGINE_V2:        Joi.alternatives().try(Joi.boolean(), Joi.string().allow('')).default(false),
+  LIGHTHOUSE_ENABLED:   Joi.alternatives().try(Joi.boolean(), Joi.string().allow('')).default(false),
+  SEO_SUMMARY_ENABLED:  Joi.alternatives().try(Joi.boolean(), Joi.string().allow('')).default(false),
   SEO_AUDIT_TIMEOUT_MS: Joi.number().default(300000),
 
   // ── Monitoring + Email ────────────────────────────────────────────────────
@@ -43,9 +43,9 @@ const schema = Joi.object({
   ANTHROPIC_API_KEY:    Joi.string().optional().allow(''),
   OPENAI_API_KEY:       Joi.string().optional().allow(''),
   HUGGINGFACE_API_KEY:  Joi.string().optional().allow(''),
-  HUGGINGFACE_MODEL:    Joi.string().default('mistralai/Mistral-7B-Instruct-v0.3'),
-  OLLAMA_URL:           Joi.string().uri().default('http://localhost:11434'),
-  OLLAMA_MODEL:         Joi.string().default('llama3'),
+  HUGGINGFACE_MODEL:    Joi.string().optional().allow('').default('mistralai/Mistral-7B-Instruct-v0.3'),
+  OLLAMA_URL:           Joi.string().optional().allow('').default('http://localhost:11434'),
+  OLLAMA_MODEL:         Joi.string().optional().allow('').default('llama3'),
   TAVILY_API_KEY:       Joi.string().optional().allow(''),
 
   // ── SEO / Keyword tracking ────────────────────────────────────────────────
