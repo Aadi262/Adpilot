@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import {
   Crosshair, Search, Target, Sparkles, CheckCircle2,
   TrendingUp, Key, Loader2,
   Globe, Code, MousePointer, AlertCircle, Clock,
-  ChevronDown, BarChart3, ShieldAlert,
+  ChevronDown, BarChart3, ShieldAlert, Zap,
 } from 'lucide-react';
 import api from '../lib/api';
 import { useToast } from '../components/ui/Toast';
@@ -80,7 +81,7 @@ function ThreatBadge({ level }) {
 }
 
 // ─── Result renderer (shared between live and loaded-from-db) ─────────────────
-function AnalysisResult({ result, onReanalyze, onAddKeyword, addKeywordPending }) {
+function AnalysisResult({ result, onReanalyze, onAddKeyword, addKeywordPending, onCounterAd }) {
   return (
     <div className="space-y-6">
       {/* Data quality banner */}
@@ -389,6 +390,25 @@ function AnalysisResult({ result, onReanalyze, onAddKeyword, addKeywordPending }
         </div>
       )}
 
+      {/* ── Cross-feature CTA: take attack plan to Forge ─────────────── */}
+      {(result.topKeywords?.length > 0 || result.winbackOpportunities?.length > 0) && (
+        <div className="rounded-xl border border-accent-purple/20 bg-accent-purple/5 px-4 py-4 flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-text-primary">Ready to fight back?</p>
+            <p className="text-xs text-text-secondary mt-0.5">
+              Take this attack plan to Forge — pre-fills your top keyword and competitor angle to generate counter-ads instantly.
+            </p>
+          </div>
+          <button
+            onClick={onCounterAd}
+            className="flex items-center gap-2 shrink-0 px-4 py-2 rounded-xl bg-accent-purple/15 hover:bg-accent-purple/25 text-accent-purple border border-accent-purple/30 text-sm font-semibold transition-colors"
+          >
+            <Zap className="w-4 h-4" />
+            Counter in Forge
+          </button>
+        </div>
+      )}
+
       {/* Data gaps */}
       {result.dataGaps?.length > 0 && (
         <div className="rounded-xl border border-border px-4 py-3 text-xs text-text-secondary space-y-1">
@@ -405,6 +425,7 @@ function AnalysisResult({ result, onReanalyze, onAddKeyword, addKeywordPending }
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function CompetitorHijackPage() {
   const toast       = useToast();
+  const navigate    = useNavigate();
   const queryClient = useQueryClient();
   const [domain, setDomain]             = useState('');
   const [analysisStep, setAnalysisStep] = useState(0);
@@ -412,8 +433,10 @@ export default function CompetitorHijackPage() {
   const [analyzing, setAnalyzing]       = useState(false);
   const [errorMsg, setErrorMsg]         = useState('');
   const [showHistory, setShowHistory]   = useState(false);
+  const historyDropdownRef = useRef(null);
 
   const feature = FEATURES.radar;
+  const progressIntervalRef = useRef(null);
 
   // Load tracked competitors for quick-analyze
   const { data: trackedCompetitors } = useQuery({
@@ -430,13 +453,26 @@ export default function CompetitorHijackPage() {
   // Auto-load last analysis on first mount if no current result
   const { data: latestReport } = useQuery({
     queryKey: ['research', 'reports', 'latest', 'adIntel'],
-    queryFn: () => api.get('/research/reports/latest?kind=adIntel').then((r) => r.data.data),
+    // Backend returns: { success, data: { report: { id, kind, query, createdAt, analysis: {...} } } }
+    queryFn: () => api.get('/research/reports/latest?kind=adIntel').then((r) => r.data.data?.report ?? null),
     staleTime: 5 * 60 * 1000,
   });
 
+  // Close history dropdown on outside click
   useEffect(() => {
-    if (!result && !analyzing && latestReport?.adAnalysis) {
-      const data = latestReport.adAnalysis;
+    if (!showHistory) return;
+    const handler = (e) => {
+      if (historyDropdownRef.current && !historyDropdownRef.current.contains(e.target)) {
+        setShowHistory(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showHistory]);
+
+  useEffect(() => {
+    if (!result && !analyzing && latestReport?.analysis && Object.keys(latestReport.analysis).length > 0) {
+      const data = latestReport.analysis;
       setResult({ ...data, _fromCache: true, _cachedAt: latestReport.createdAt });
       if (data.domain) setDomain(data.domain);
     }
@@ -451,15 +487,19 @@ export default function CompetitorHijackPage() {
     setErrorMsg('');
     setAnalysisStep(0);
 
-    const interval = setInterval(() => setAnalysisStep((s) => s + 1), 1200);
+    // Clear any leftover interval from a previous run before starting a new one
+    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    progressIntervalRef.current = setInterval(() => setAnalysisStep((s) => s + 1), 1200);
 
     try {
       const res = await api.get(`/research/hijack-analysis?domain=${encodeURIComponent(target)}`);
-      clearInterval(interval);
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
       setResult(res.data.data);
       queryClient.invalidateQueries({ queryKey: ['research', 'reports'] });
     } catch (err) {
-      clearInterval(interval);
+      clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
       const message = err?.response?.data?.error?.message || 'Analysis failed';
       setErrorMsg(message);
       toast.error(message);
@@ -478,9 +518,11 @@ export default function CompetitorHijackPage() {
   });
 
   const loadReport = (report) => {
-    if (!report?.adAnalysis) return;
-    setResult({ ...report.adAnalysis, _fromCache: true, _cachedAt: report.createdAt });
-    if (report.adAnalysis.domain) setDomain(report.adAnalysis.domain);
+    // Backend /research/reports returns objects with `analysis` field (not `adAnalysis`)
+    const data = report?.analysis;
+    if (!data || Object.keys(data).length === 0) return;
+    setResult({ ...data, _fromCache: true, _cachedAt: report.createdAt });
+    if (data.domain) setDomain(data.domain);
     setShowHistory(false);
     setErrorMsg('');
   };
@@ -507,7 +549,7 @@ export default function CompetitorHijackPage() {
             </p>
           </div>
           {recentReports?.length > 0 && (
-            <div className="relative shrink-0">
+            <div className="relative shrink-0" ref={historyDropdownRef}>
               <button
                 onClick={() => setShowHistory((v) => !v)}
                 className="flex items-center gap-1.5 btn-secondary text-xs"
@@ -525,7 +567,7 @@ export default function CompetitorHijackPage() {
                       onClick={() => loadReport(r)}
                       className="w-full text-left px-3 py-2.5 hover:bg-bg-secondary transition-colors border-b border-border/50 last:border-0"
                     >
-                      <p className="text-xs font-medium text-text-primary truncate">{r.adAnalysis?.domain || r.query || 'Unknown'}</p>
+                      <p className="text-xs font-medium text-text-primary truncate">{r.analysis?.domain || r.query || 'Unknown'}</p>
                       <p className="text-[10px] text-text-secondary mt-0.5">{timeAgo(r.createdAt)}</p>
                     </button>
                   ))}
@@ -597,6 +639,16 @@ export default function CompetitorHijackPage() {
           onReanalyze={() => handleAnalyze()}
           onAddKeyword={(kw) => addKeywordMutation.mutate(kw)}
           addKeywordPending={addKeywordMutation.isPending}
+          onCounterAd={() => {
+            // Grab the top keyword from the analysis to pre-fill Forge
+            const topKw = result.topKeywords?.[0]?.keyword || result.topKeywords?.[0]?.word || '';
+            const winback = result.winbackOpportunities?.[0]?.suggestedHeadline || '';
+            const params = new URLSearchParams();
+            if (topKw) params.set('keyword', topKw);
+            if (result.domain) params.set('competitor', result.domain);
+            if (winback) params.set('brief', winback);
+            navigate(`/ads?${params.toString()}`);
+          }}
         />
       )}
 

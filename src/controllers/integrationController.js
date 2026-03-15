@@ -39,16 +39,35 @@ exports.syncData = async (req, res, next) => {
   try {
     const { provider } = req.params;
     const { dateFrom, dateTo } = req.body;
+    const teamId = req.user.teamId;
 
-    // Enqueue the sync job — processor handles fetching + persisting to campaigns.performance
-    const job = await queues.integrationSync.add({
-      teamId:   req.user.teamId,
-      provider,
-      dateFrom: dateFrom || null,
-      dateTo:   dateTo   || null,
+    // Run synchronously so we can return real feedback to the user immediately.
+    // Background queue handles the scheduled 6-hour auto-sync separately.
+    const syncProcessor = require('../queues/processors/integrationSyncProcessor');
+    const result = await syncProcessor({
+      data: { teamId, provider, dateFrom: dateFrom || null, dateTo: dateTo || null },
     });
 
-    return success(res, { provider, jobId: job.id, message: 'Sync job queued' });
+    // Update lastSyncAt on the integration record
+    const prisma = require('../config/prisma');
+    await prisma.integration.updateMany({
+      where: { teamId, provider },
+      data:  { lastSyncAt: new Date() },
+    });
+
+    return success(res, {
+      provider,
+      synced:      result.synced,
+      unmatched:   result.unmatched,
+      snapshots:   result.snapshots,
+      totalSpend:  result.totalSpend,
+      totalClicks: result.totalClicks,
+      avgRoas:     result.avgRoas,
+      syncedAt:    result.syncedAt,
+      message: result.synced > 0
+        ? `Synced ${result.synced} campaign${result.synced !== 1 ? 's' : ''}. ${result.snapshots} metric snapshot${result.snapshots !== 1 ? 's' : ''} recorded.`
+        : `No matching campaigns found for ${provider}. Create campaigns in AdPilot that match your ${provider} campaign names.`,
+    });
   } catch (err) { next(err); }
 };
 

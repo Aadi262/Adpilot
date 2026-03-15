@@ -3,6 +3,9 @@
 const logger             = require('../../config/logger');
 const AppError           = require('../../common/AppError');
 const CompetitorAnalyzer = require('./CompetitorAnalyzer');
+const groq               = require('./GroqService');
+const cerebra            = require('./CerebraService');
+const together           = require('./TogetherAIService');
 const gemini             = require('./GeminiService');
 const anthropic          = require('./AnthropicService');
 const teamContextService = require('./TeamContextService');
@@ -57,16 +60,22 @@ class CompetitorHijackService {
         teamMemory:  teamContextService.formatCompetitorContext(teamContext),
       };
 
-      // Try Gemini first (free), then Anthropic (paid fallback)
-      if (gemini.isAvailable) {
+      // AI chain: Groq (R1) → Cerebras (Qwen3/Llama3.3) → Together AI (R1 full) → Gemini → Anthropic
+      const aiProviders = [
+        groq.isAvailable      ? () => groq.analyzeCompetitor(aiParams)      : null,
+        cerebra.isAvailable   ? () => cerebra.analyzeCompetitor(aiParams)   : null,
+        together.isAvailable  ? () => together.analyzeCompetitor(aiParams)  : null,
+        gemini.isAvailable    ? () => gemini.analyzeCompetitor(aiParams)    : null,
+        anthropic.isAvailable ? () => anthropic.analyzeCompetitor(aiParams) : null,
+      ].filter(Boolean);
+
+      for (const fn of aiProviders) {
         try {
-          aiInsights = await gemini.analyzeCompetitor(aiParams);
+          aiInsights = await fn();
+          if (aiInsights) break;
         } catch {
           aiInsights = null;
         }
-      }
-      if (!aiInsights && anthropic.isAvailable) {
-        aiInsights = await anthropic.analyzeCompetitor(aiParams);
       }
 
       const finalKeywordGaps = this._buildKeywordGaps(mergedKeywords, aiInsights);

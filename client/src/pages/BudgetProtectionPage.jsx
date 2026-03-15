@@ -175,14 +175,20 @@ function AlertCard({ alert, onApplyFix }) {
         <Badge status={alert.platform} />
       </div>
       <p className="text-sm font-semibold text-text-primary">{alert.campaignName}</p>
-      <p className="text-xs text-text-secondary">{alert.detail}</p>
-      <p className="text-xs italic">{alert.recommendedAction}</p>
-      {alert.action === 'pause' && (
+      <p className="text-xs text-text-secondary">{alert.message}</p>
+      {alert.currentValue != null && (
+        <p className="text-xs text-text-secondary">
+          Current: <span className="font-semibold text-text-primary">{Number(alert.currentValue).toFixed(2)}</span>
+          {alert.threshold != null && <> · Threshold: {alert.threshold}</>}
+        </p>
+      )}
+      {/* Show Apply Fix for any actionable alert: explicit pause rules OR critical auto-detected alerts */}
+      {(alert.action === 'pause' || alert.action === 'reduce_budget' || (alert.autoDetected && alert.severity === 'critical')) && (
         <button
           onClick={() => onApplyFix(alert)}
           className="mt-1 text-xs px-3 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-300 transition-colors font-medium"
         >
-          Apply Fix — Pause Campaign
+          {alert.action === 'reduce_budget' ? 'Apply Fix — Reduce Budget 30%' : 'Apply Fix — Pause Campaign'}
         </button>
       )}
     </div>

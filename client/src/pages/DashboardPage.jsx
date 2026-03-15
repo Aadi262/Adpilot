@@ -5,7 +5,7 @@ import {
   Sparkles, FileText, TrendingUp, TrendingDown, Activity,
   Zap, X,
   Download, Copy, CheckCircle, Loader2, AlertCircle,
-  Target, Bell, ChevronRight,
+  Target, Bell, ChevronRight, ShieldAlert, Award, Eye,
 } from 'lucide-react';
 import api from '../lib/api';
 import { useToast } from '../components/ui/Toast';
@@ -644,6 +644,208 @@ function ActivityItem({ item }) {
   );
 }
 
+// ── Situation Report Panel ─────────────────────────────────────────────────────
+function SituationReportPanel({ report, loading }) {
+  const navigate = useNavigate();
+
+  if (loading) {
+    return (
+      <div style={{
+        background: 'rgba(255,255,255,0.02)',
+        border: '1px solid rgba(255,255,255,0.06)',
+        borderRadius: 16, padding: '18px 22px',
+      }}>
+        <div className="skeleton h-4 w-40 mb-4 rounded" />
+        <div style={{ display: 'flex', gap: 10 }}>
+          {[1, 2, 3].map(i => (
+            <div key={i} className="skeleton h-16 rounded" style={{ flex: 1 }} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!report) return null;
+
+  const { urgent = [], watch = [], winners = [], sentinelActions = [], hasRealData } = report;
+  const totalItems = urgent.length + watch.length + winners.length + sentinelActions.length;
+
+  if (!hasRealData && totalItems === 0) return null;
+
+  const severityColor = (s) => s === 'critical' ? '#ef4444' : '#f59e0b';
+
+  return (
+    <div style={{
+      background: 'rgba(255,255,255,0.025)',
+      border: '1px solid rgba(255,255,255,0.07)',
+      borderRadius: 16, padding: '18px 22px',
+    }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+        <Bell size={14} color="#f59e0b" />
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.85)' }}>
+          Morning Briefing
+        </span>
+        <span style={{
+          fontSize: 10, fontWeight: 800, letterSpacing: '0.07em',
+          background: 'rgba(139,92,246,0.15)', color: '#a78bfa',
+          padding: '2px 8px', borderRadius: 20,
+        }}>
+          {totalItems} ITEMS
+        </span>
+        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginLeft: 'auto' }}>
+          {new Date(report.generatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </span>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+
+        {/* URGENT */}
+        {urgent.length > 0 && (
+          <div style={{
+            background: 'rgba(239,68,68,0.06)',
+            border: '1px solid rgba(239,68,68,0.2)',
+            borderRadius: 12, padding: '14px 16px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+              <ShieldAlert size={12} color="#ef4444" />
+              <span style={{ fontSize: 10, fontWeight: 800, color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                Urgent — {urgent.length}
+              </span>
+            </div>
+            {urgent.slice(0, 3).map((item, i) => (
+              <div
+                key={i}
+                onClick={() => navigate(item.actionLink)}
+                style={{
+                  marginTop: i > 0 ? 8 : 0, cursor: 'pointer',
+                  borderTop: i > 0 ? '1px solid rgba(239,68,68,0.1)' : 'none',
+                  paddingTop: i > 0 ? 8 : 0,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.82)' }}>
+                    {item.campaign}
+                  </span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: severityColor(item.severity) }}>
+                    {item.changePct}%
+                  </span>
+                </div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.42)', marginTop: 2 }}>
+                  {item.metric} drop · {item.action}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* WINNERS */}
+        {winners.length > 0 && (
+          <div style={{
+            background: 'rgba(16,185,129,0.06)',
+            border: '1px solid rgba(16,185,129,0.2)',
+            borderRadius: 12, padding: '14px 16px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+              <Award size={12} color="#10b981" />
+              <span style={{ fontSize: 10, fontWeight: 800, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                Scale Ready — {winners.length}
+              </span>
+            </div>
+            {winners.slice(0, 3).map((w, i) => (
+              <div
+                key={i}
+                onClick={() => navigate('/scaling')}
+                style={{
+                  marginTop: i > 0 ? 8 : 0, cursor: 'pointer',
+                  borderTop: i > 0 ? '1px solid rgba(16,185,129,0.1)' : 'none',
+                  paddingTop: i > 0 ? 8 : 0,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.82)' }}>
+                    {w.campaign}
+                  </span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#10b981' }}>
+                    {w.score}/100
+                  </span>
+                </div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.42)', marginTop: 2 }}>
+                  {w.verdict}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* WATCH (alerts) */}
+        {watch.length > 0 && (
+          <div style={{
+            background: 'rgba(245,158,11,0.06)',
+            border: '1px solid rgba(245,158,11,0.2)',
+            borderRadius: 12, padding: '14px 16px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+              <Eye size={12} color="#f59e0b" />
+              <span style={{ fontSize: 10, fontWeight: 800, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                Watch — {watch.length}
+              </span>
+            </div>
+            {watch.slice(0, 3).map((a, i) => (
+              <div
+                key={i}
+                onClick={() => navigate('/budget-ai')}
+                style={{
+                  marginTop: i > 0 ? 8 : 0, cursor: 'pointer',
+                  borderTop: i > 0 ? '1px solid rgba(245,158,11,0.1)' : 'none',
+                  paddingTop: i > 0 ? 8 : 0,
+                }}
+              >
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.82)' }}>
+                  {a.campaign}
+                </div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.42)', marginTop: 2 }}>
+                  {a.action}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* SENTINEL ACTIONS */}
+        {sentinelActions.length > 0 && (
+          <div style={{
+            background: 'rgba(139,92,246,0.06)',
+            border: '1px solid rgba(139,92,246,0.2)',
+            borderRadius: 12, padding: '14px 16px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+              <Zap size={12} color="#a78bfa" />
+              <span style={{ fontSize: 10, fontWeight: 800, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                Auto-Actions — {sentinelActions.length}
+              </span>
+            </div>
+            {sentinelActions.slice(0, 3).map((a, i) => (
+              <div key={i} style={{
+                marginTop: i > 0 ? 8 : 0,
+                borderTop: i > 0 ? '1px solid rgba(139,92,246,0.1)' : 'none',
+                paddingTop: i > 0 ? 8 : 0,
+              }}>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.72)', lineHeight: 1.4 }}>
+                  {a.message?.slice(0, 80)}
+                </div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.32)', marginTop: 2 }}>
+                  {new Date(a.takenAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Dashboard ─────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const [showReport, setShowReport] = useState(false);
@@ -668,6 +870,14 @@ export default function DashboardPage() {
     queryKey: ['dashboard', 'recommendations'],
     queryFn: () => api.get('/dashboard/recommendations').then(r => r.data.data ?? r.data),
     refetchInterval: 900_000,
+    retry: 1,
+  });
+
+  // ── 4. Situation Report (morning briefing)
+  const { data: situationData, isLoading: situationLoading } = useQuery({
+    queryKey: ['analytics', 'situation-report'],
+    queryFn: () => api.get('/analytics/situation-report').then(r => r.data.data ?? r.data),
+    refetchInterval: 300_000,
     retry: 1,
   });
 
@@ -823,6 +1033,11 @@ export default function DashboardPage() {
           loading={metricsLoading}
         />
       </div>
+
+      {/* ── Zone 2b: Morning Briefing (Situation Report) ──────────────────────── */}
+      {(situationLoading || (situationData && (situationData.hasRealData || situationData.totalItems > 0))) && (
+        <SituationReportPanel report={situationData} loading={situationLoading} />
+      )}
 
       {/* ── Zone 3: AI Recommendations + Activity ─────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>

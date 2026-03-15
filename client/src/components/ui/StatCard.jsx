@@ -28,15 +28,11 @@ function useCountUp(target, duration = 1000) {
 export default function StatCard({ icon: Icon, label, value, change, prefix = '', suffix = '', sparkData, iconColor = 'text-accent-blue', iconBg = 'bg-accent-blue/10' }) {
   const numericValue = parseFloat(String(value).replace(/[^0-9.]/g, '')) || 0;
   const animated = useCountUp(numericValue);
-  const isPositive = change >= 0;
+  const isPositive = change == null || change >= 0;
 
   const displayValue = typeof value === 'string' && value.includes('.')
     ? animated.toFixed(1)
     : animated.toLocaleString();
-
-  const mockSpark = sparkData || Array.from({ length: 7 }, (_, i) => ({
-    v: Math.max(10, Math.round(numericValue * (0.6 + Math.random() * 0.5))),
-  }));
 
   return (
     <div className="card flex flex-col gap-4 hover:border-accent-blue/30 transition-colors">
@@ -47,7 +43,7 @@ export default function StatCard({ icon: Icon, label, value, change, prefix = ''
           </div>
           <span className="text-text-secondary text-sm font-medium">{label}</span>
         </div>
-        {change !== undefined && (
+        {change != null && (
           <div className={`flex items-center gap-1 text-xs font-semibold ${isPositive ? 'text-accent-green' : 'text-red-400'}`}>
             {isPositive ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
             {Math.abs(change)}%
@@ -59,10 +55,10 @@ export default function StatCard({ icon: Icon, label, value, change, prefix = ''
         {prefix}{displayValue}{suffix}
       </div>
 
-      {mockSpark && (
+      {sparkData && (
         <div className="h-10">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={mockSpark}>
+            <LineChart data={sparkData}>
               <Line
                 type="monotone"
                 dataKey="v"

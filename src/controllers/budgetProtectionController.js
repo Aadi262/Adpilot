@@ -135,7 +135,7 @@ exports.applyFix = async (req, res, next) => {
     } else if (action === 'reduce_budget') {
       const newBudget = Math.round((campaign.budget || 0) * 0.7);
       updateData = { budget: newBudget };
-      message    = `Campaign "${campaign.name}" budget reduced to ₹${newBudget} (30% cut) by Budget Protection AI`;
+      message    = `Campaign "${campaign.name}" budget reduced to $${newBudget} (30% cut) by Budget Protection AI`;
     }
 
     const updated = await prisma.campaign.update({

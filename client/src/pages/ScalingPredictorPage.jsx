@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   TrendingUp, CheckCircle2, AlertTriangle, XCircle,
-  Sparkles, ChevronRight, RefreshCw,
+  Sparkles, ChevronRight, RefreshCw, Wifi, WifiOff,
 } from 'lucide-react';
 import api from '../lib/api';
 import { useToast } from '../components/ui/Toast';
@@ -65,16 +65,46 @@ function FactorBar({ factor }) {
   );
 }
 
+// ─── Platform Signal row ──────────────────────────────────────────────────────
+function PlatformSignalRow({ signal }) {
+  const statusColor = signal.status === 'positive' ? 'text-accent-green'
+                    : signal.status === 'critical'  ? 'text-red-400'
+                    : signal.status === 'warning'   ? 'text-yellow-400'
+                    : signal.status === 'missing'   ? 'text-text-secondary'
+                    : 'text-accent-blue';
+  const Icon = signal.status === 'missing' ? WifiOff : Wifi;
+
+  return (
+    <div className="flex items-start gap-2">
+      <Icon className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${statusColor}`} />
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-text-primary">{signal.name}</span>
+          {signal.value && (
+            <span className={`text-xs font-bold ${statusColor}`}>{signal.value}</span>
+          )}
+        </div>
+        <p className="text-[11px] text-text-secondary leading-relaxed mt-0.5">{signal.detail}</p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Confirm Scale Dialog ─────────────────────────────────────────────────────
 function ConfirmScaleDialog({ campaign, onConfirm, onCancel }) {
   const [pct, setPct] = useState(String(campaign.safeScaleRange?.min ?? 15));
+  const currentBudget = parseFloat(campaign.budget ?? 0);
+  const parsedPct     = parseFloat(pct);
+  const newBudget     = !isNaN(parsedPct) && currentBudget > 0
+    ? (currentBudget * (1 + parsedPct / 100)).toFixed(2)
+    : null;
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50">
       <div className="bg-bg-card border border-border rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-sm p-6 space-y-4">
         <h3 className="text-base font-semibold text-text-primary">Scale Campaign Budget</h3>
         <p className="text-sm text-text-secondary">
-          Increase <span className="text-text-primary font-medium">{campaign.campaignName}</span> budget by:
+          Increase <span className="text-text-primary font-medium">{campaign.campaignName}</span> daily budget by:
         </p>
         <div className="flex items-center gap-3">
           <input
@@ -87,14 +117,32 @@ function ConfirmScaleDialog({ campaign, onConfirm, onCancel }) {
           />
           <span className="text-sm text-text-secondary">%</span>
           <span className="text-xs text-text-secondary ml-auto">
-            Safe range: {campaign.safeScaleRange?.min}–{campaign.safeScaleRange?.max}%
+            Apex safe range: {campaign.safeScaleRange?.min}–{campaign.safeScaleRange?.max}%
           </span>
         </div>
+        {/* Budget preview */}
+        <div className="rounded-xl bg-bg-secondary border border-border px-4 py-3 grid grid-cols-2 gap-3">
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-text-secondary">Current Budget</p>
+            <p className="text-sm font-semibold text-text-primary mt-0.5">
+              {currentBudget > 0 ? `$${currentBudget.toFixed(2)}/day` : 'Not set'}
+            </p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-text-secondary">New Budget</p>
+            <p className="text-sm font-semibold text-accent-green mt-0.5">
+              {newBudget ? `$${newBudget}/day` : '—'}
+            </p>
+          </div>
+        </div>
+        <p className="text-[11px] text-text-secondary">
+          Industry best practice: increase by ≤20% per step, observe for 5–7 days before the next increase.
+        </p>
         <div className="flex justify-end gap-3 pt-2">
           <button onClick={onCancel} className="btn-secondary text-sm px-4">Cancel</button>
           <button
-            onClick={() => onConfirm(parseFloat(pct))}
-            disabled={!pct || isNaN(parseFloat(pct))}
+            onClick={() => onConfirm(parsedPct)}
+            disabled={!pct || isNaN(parsedPct) || parsedPct <= 0}
             className="btn-primary text-sm px-4"
           >
             Apply Scale
@@ -177,6 +225,16 @@ function CampaignCard({ campaign, expanded, onToggle, onScale }) {
             </div>
           </div>
 
+          {/* Platform-specific signals (Meta frequency, Google IS) */}
+          {campaign.platformSignals?.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2">Platform Signals</p>
+              <div className="space-y-2.5">
+                {campaign.platformSignals.map((s, i) => <PlatformSignalRow key={i} signal={s} />)}
+              </div>
+            </div>
+          )}
+
           {/* Data quality */}
           {campaign.dataQuality && (
             <div className="space-y-1">
@@ -223,8 +281,9 @@ function CampaignCard({ campaign, expanded, onToggle, onScale }) {
 export default function ScalingPredictorPage() {
   const toast        = useToast();
   const queryClient  = useQueryClient();
-  const [expandedId, setExpandedId] = useState(null);
+  const [expandedId, setExpandedId]         = useState(null);
   const [confirmCampaign, setConfirmCampaign] = useState(null);
+  const [platformFilter, setPlatformFilter]   = useState('all');
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['scaling', 'all'],
@@ -235,7 +294,8 @@ export default function ScalingPredictorPage() {
   const applyScaleMutation = useMutation({
     mutationFn: ({ campaign, pct }) => {
       const currentBudget = parseFloat(campaign.budget ?? 0);
-      const newBudget     = +(currentBudget * (1 + pct / 100)).toFixed(2);
+      if (currentBudget <= 0) throw new Error('Campaign budget is not set');
+      const newBudget = +(currentBudget * (1 + pct / 100)).toFixed(2);
       return api.patch(`/campaigns/${campaign.campaignId}`, { budget: newBudget });
     },
     onSuccess: (_, { campaign, pct }) => {
@@ -243,13 +303,29 @@ export default function ScalingPredictorPage() {
       toast.success(`${campaign.campaignName} budget scaled by +${pct}%`);
       setConfirmCampaign(null);
     },
-    onError: () => toast.error('Failed to update campaign budget'),
+    onError: (err) => toast.error(err?.message || 'Failed to update campaign budget'),
   });
 
-  const campaigns = data ?? [];
-  const ready     = campaigns.filter((c) => c.score >= 70).length;
-  const caution   = campaigns.filter((c) => c.score >= 50 && c.score < 70).length;
-  const notReady  = campaigns.filter((c) => c.score < 50).length;
+  const allCampaigns = data ?? [];
+
+  // Platform filter
+  const campaigns = useMemo(() => {
+    if (platformFilter === 'all') return allCampaigns;
+    return allCampaigns.filter((c) =>
+      (c.platform ?? '').toLowerCase() === platformFilter ||
+      (c.platform ?? '').toLowerCase() === 'both'
+    );
+  }, [allCampaigns, platformFilter]);
+
+  const ready    = campaigns.filter((c) => c.score >= 70).length;
+  const caution  = campaigns.filter((c) => c.score >= 50 && c.score < 70).length;
+  const notReady = campaigns.filter((c) => c.score < 50).length;
+
+  // Detect available platforms for filter tabs
+  const availablePlatforms = useMemo(() => {
+    const set = new Set(allCampaigns.map((c) => (c.platform ?? '').toLowerCase()));
+    return set;
+  }, [allCampaigns]);
 
   const feature = FEATURES.apex;
 
@@ -298,6 +374,37 @@ export default function ScalingPredictorPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Platform filter ────────────────────────────────────────────── */}
+      {allCampaigns.length > 1 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-text-secondary">Platform:</span>
+          {['all', 'meta', 'google'].map((p) => {
+            const disabled = p !== 'all' && !availablePlatforms.has(p) && !availablePlatforms.has('both');
+            return (
+              <button
+                key={p}
+                onClick={() => !disabled && setPlatformFilter(p)}
+                disabled={disabled}
+                className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                  platformFilter === p
+                    ? 'border-accent-blue bg-accent-blue/10 text-accent-blue'
+                    : disabled
+                    ? 'border-border text-text-secondary/30 cursor-not-allowed'
+                    : 'border-border text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                {p === 'all' ? 'All' : p.charAt(0).toUpperCase() + p.slice(1)}
+              </button>
+            );
+          })}
+          {campaigns.length !== allCampaigns.length && (
+            <span className="text-xs text-text-secondary ml-1">
+              Showing {campaigns.length} of {allCampaigns.length}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* ── Campaign cards ─────────────────────────────────────────────── */}
       {isLoading ? (

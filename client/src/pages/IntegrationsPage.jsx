@@ -10,6 +10,8 @@ import {
   CheckCircle,
   X,
   Clock,
+  Database,
+  TrendingUp,
 } from 'lucide-react';
 import api from '../lib/api';
 
@@ -252,9 +254,16 @@ function ProviderCard({ provider, integration }) {
 
   const isConnected = integration?.connected || integration?.status === 'connected';
 
+  const [syncResult, setSyncResult] = useState(null);
+
   const syncMutation = useMutation({
     mutationFn: () => api.post(`/integrations/${provider.id}/sync`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['integrations'] }),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['integrations'] });
+      queryClient.invalidateQueries({ queryKey: ['analytics'] });
+      setSyncResult(res.data.data);
+    },
+    onError: () => setSyncResult(null),
   });
 
   const disconnectMutation = useMutation({
@@ -338,11 +347,35 @@ function ProviderCard({ provider, integration }) {
           )}
         </div>
 
-        {syncMutation.isSuccess && (
-          <p className="flex items-center gap-1.5 text-accent-green text-xs -mt-2">
-            <CheckCircle className="w-3.5 h-3.5" />
-            Sync completed successfully.
-          </p>
+        {syncMutation.isSuccess && syncResult && (
+          <div className="rounded-lg bg-accent-green/5 border border-accent-green/20 px-3 py-2.5 space-y-1.5 -mt-1">
+            <p className="flex items-center gap-1.5 text-accent-green text-xs font-medium">
+              <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+              {syncResult.message}
+            </p>
+            {syncResult.synced > 0 && (
+              <div className="grid grid-cols-3 gap-2 pt-0.5">
+                {syncResult.totalSpend != null && (
+                  <div className="text-center">
+                    <p className="text-[10px] text-text-secondary uppercase tracking-wide">Spend</p>
+                    <p className="text-xs font-semibold text-text-primary">${syncResult.totalSpend?.toLocaleString()}</p>
+                  </div>
+                )}
+                {syncResult.avgRoas != null && (
+                  <div className="text-center">
+                    <p className="text-[10px] text-text-secondary uppercase tracking-wide">Avg ROAS</p>
+                    <p className="text-xs font-semibold text-text-primary">{syncResult.avgRoas}x</p>
+                  </div>
+                )}
+                {syncResult.snapshots != null && (
+                  <div className="text-center">
+                    <p className="text-[10px] text-text-secondary uppercase tracking-wide">Snapshots</p>
+                    <p className="text-xs font-semibold text-text-primary">{syncResult.snapshots}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         )}
         {syncMutation.error && (
           <p className="flex items-center gap-1.5 text-red-400 text-xs -mt-2">

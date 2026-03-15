@@ -16,21 +16,22 @@ model Team {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  users        User[]
-  campaigns    Campaign[]
-  rules        Rule[]
-  integrations Integration[]
-  keywords     Keyword[]
-  keywordRanks KeywordRank[]
-  competitors  Competitor[]
-  seoAudits    SeoAudit[]
-  notifications Notification[]
+  users           User[]
+  campaigns       Campaign[]
+  rules           Rule[]
+  integrations    Integration[]
+  keywords        Keyword[]
+  keywordRanks    KeywordRank[]
+  competitors     Competitor[]
+  seoAudits       SeoAudit[]
+  notifications   Notification[]
   researchReports ResearchReport[]
-  contentBriefs ContentBrief[]
-  invites      TeamInvite[]
-  auditLogs    AuditLog[]
-  campaignAlerts CampaignAlert[]
-  seoMonitors  SeoMonitor[]
+  contentBriefs   ContentBrief[]
+  invites         TeamInvite[]
+  auditLogs       AuditLog[]
+  campaignAlerts  CampaignAlert[]
+  seoMonitors     SeoMonitor[]
+  metricSnapshots CampaignMetricSnapshot[]
   @@map("teams")
 }
 
@@ -69,15 +70,43 @@ model Campaign {
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
-  team   Team   @relation(fields: [teamId], references: [id])
-  ads    Ad[]
-  rules  Rule[]
-  notifications Notification[]
-  campaignAlerts CampaignAlert[]
+  team            Team                    @relation(fields: [teamId], references: [id])
+  ads             Ad[]
+  rules           Rule[]
+  notifications   Notification[]
+  campaignAlerts  CampaignAlert[]
+  metricSnapshots CampaignMetricSnapshot[]
 
   @@index([teamId, status])
   @@index([teamId, deletedAt])
   @@map("campaigns")
+}
+
+model CampaignMetricSnapshot {
+  id              String   @id @default(uuid())
+  campaignId      String   @map("campaign_id")
+  teamId          String   @map("team_id")
+  date            DateTime @db.Date
+  spend           Float    @default(0)
+  revenue         Float    @default(0)
+  roas            Float    @default(0)
+  clicks          Int      @default(0)
+  impressions     Int      @default(0)
+  conversions     Int      @default(0)
+  ctr             Float    @default(0)
+  cpa             Float?
+  frequency       Float?
+  impressionShare Float?   @map("impression_share")
+  isLostBudget    Float?   @map("is_lost_budget")
+  source          String   @default("manual") // "meta" | "google" | "manual" | "sync"
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  team     Team     @relation(fields: [teamId], references: [id])
+
+  @@unique([campaignId, date])
+  @@index([teamId, date(sort: Desc)])
+  @@index([campaignId, date(sort: Desc)])
+  @@map("campaign_metric_snapshots")
 }
 
 model Ad {

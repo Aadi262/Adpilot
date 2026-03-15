@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard, Zap, DollarSign, TrendingUp, Download,
-  MousePointerClick, Eye, BarChart3,
+  MousePointerClick, BarChart3, Database,
 } from 'lucide-react';
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
@@ -15,33 +15,6 @@ import StatCard from '../components/ui/StatCard';
 import Badge from '../components/ui/Badge';
 
 const COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444'];
-
-// Deterministic mock time-series (keyed by range)
-const MOCK_SERIES = {
-  '7d': [
-    { label: 'Mon', spend: 620,  roas: 3.4, clicks: 1820 },
-    { label: 'Tue', spend: 580,  roas: 2.9, clicks: 1540 },
-    { label: 'Wed', spend: 710,  roas: 3.8, clicks: 2100 },
-    { label: 'Thu', spend: 640,  roas: 3.1, clicks: 1740 },
-    { label: 'Fri', spend: 800,  roas: 4.0, clicks: 2380 },
-    { label: 'Sat', spend: 520,  roas: 3.2, clicks: 1320 },
-    { label: 'Sun', spend: 480,  roas: 2.8, clicks: 1180 },
-  ],
-  '30d': [
-    { label: 'W1', spend: 1200, roas: 3.1, clicks: 4200 },
-    { label: 'W2', spend: 2100, roas: 3.5, clicks: 6800 },
-    { label: 'W3', spend: 1800, roas: 2.9, clicks: 5400 },
-    { label: 'W4', spend: 3200, roas: 4.1, clicks: 9100 },
-  ],
-  '90d': [
-    { label: 'Sep', spend: 4200, roas: 3.0, clicks: 12000 },
-    { label: 'Oct', spend: 5100, roas: 3.5, clicks: 15000 },
-    { label: 'Nov', spend: 4800, roas: 2.9, clicks: 13500 },
-    { label: 'Dec', spend: 7200, roas: 4.1, clicks: 21000 },
-    { label: 'Jan', spend: 6700, roas: 3.8, clicks: 19000 },
-    { label: 'Feb', spend: 8800, roas: 3.7, clicks: 24500 },
-  ],
-};
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
@@ -73,7 +46,14 @@ export default function AnalyticsPage() {
     queryFn: () => api.get('/analytics/campaigns').then((r) => r.data.data.campaigns),
   });
 
-  const seriesData = MOCK_SERIES[range] ?? MOCK_SERIES['30d'];
+  const { data: timeSeriesData, isLoading: loadingSeries } = useQuery({
+    queryKey: ['analytics', 'time-series', range],
+    queryFn: () => api.get(`/analytics/time-series?range=${range}`).then((r) => r.data.data),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const seriesData   = timeSeriesData?.series ?? [];
+  const hasRealData  = timeSeriesData?.hasData === true;
 
   // Platform pie data
   const platformCounts = (campaigns || []).reduce((acc, c) => {
@@ -153,11 +133,11 @@ export default function AnalyticsPage() {
           ? [...Array(5)].map((_, i) => <div key={i} className="skeleton h-28 rounded-xl" />)
           : (
             <>
-              <StatCard icon={LayoutDashboard} label="Total Campaigns"  value={overview?.totalCampaigns  ?? 0} change={12} iconColor="text-accent-blue"   iconBg="bg-accent-blue/10" />
-              <StatCard icon={Zap}             label="Active"           value={overview?.activeCampaigns ?? 0} change={5}  iconColor="text-accent-green"  iconBg="bg-accent-green/10" />
-              <StatCard icon={DollarSign}      label="Total Spend"      value={overview?.totalAdSpend    ?? 0} change={-3} prefix="$" iconColor="text-accent-purple" iconBg="bg-accent-purple/10" />
-              <StatCard icon={TrendingUp}      label="Avg ROAS"         value={overview?.avgROAS         ?? 0} change={8}  suffix="x" iconColor="text-orange-400"  iconBg="bg-orange-400/10" />
-              <StatCard icon={MousePointerClick} label="Total Clicks"   value={overview?.totalClicks     ?? 0} change={15} iconColor="text-cyan-400"     iconBg="bg-cyan-400/10" />
+              <StatCard icon={LayoutDashboard} label="Total Campaigns"  value={overview?.totalCampaigns  ?? 0} iconColor="text-accent-blue"   iconBg="bg-accent-blue/10" />
+              <StatCard icon={Zap}             label="Active"           value={overview?.activeCampaigns ?? 0} iconColor="text-accent-green"  iconBg="bg-accent-green/10" />
+              <StatCard icon={DollarSign}      label="Total Spend"      value={overview?.totalAdSpend    ?? 0} prefix="$" iconColor="text-accent-purple" iconBg="bg-accent-purple/10" />
+              <StatCard icon={TrendingUp}      label="Avg ROAS"         value={overview?.avgROAS         ?? 0} suffix="x" iconColor="text-orange-400"  iconBg="bg-orange-400/10" />
+              <StatCard icon={MousePointerClick} label="Total Clicks"   value={overview?.totalClicks     ?? 0} iconColor="text-cyan-400"     iconBg="bg-cyan-400/10" />
             </>
           )}
       </div>
@@ -174,18 +154,35 @@ export default function AnalyticsPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Spend & ROAS over time */}
             <div className="card">
-              <h3 className="text-sm font-semibold text-text-primary mb-4">Spend &amp; ROAS over Time</h3>
-              <ResponsiveContainer width="100%" height={210}>
-                <LineChart data={seriesData} margin={{ left: -20, right: 4 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1A1E2E" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fill: '#8892A8', fontSize: 11 }} tickLine={false} axisLine={false} />
-                  <YAxis yAxisId="left"  tick={{ fill: '#8892A8', fontSize: 11 }} tickLine={false} axisLine={false} />
-                  <YAxis yAxisId="right" orientation="right" tick={{ fill: '#8892A8', fontSize: 11 }} tickLine={false} axisLine={false} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Line yAxisId="left"  type="monotone" dataKey="spend" name="Spend" stroke="#3B82F6" strokeWidth={2} dot={false} />
-                  <Line yAxisId="right" type="monotone" dataKey="roas"  name="ROAS"  stroke="#10B981" strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-text-primary">Spend &amp; ROAS over Time</h3>
+                {!loadingSeries && !hasRealData && (
+                  <span className="flex items-center gap-1 text-xs text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
+                    <Database className="w-3 h-3" />No sync data yet
+                  </span>
+                )}
+              </div>
+              {loadingSeries ? (
+                <div className="skeleton h-52 rounded-lg" />
+              ) : !hasRealData ? (
+                <div className="h-52 flex flex-col items-center justify-center gap-2 text-center">
+                  <Database className="w-8 h-8 text-text-secondary opacity-30" />
+                  <p className="text-sm font-medium text-text-primary">No time-series data yet</p>
+                  <p className="text-xs text-text-secondary max-w-xs">Connect your Meta or Google Ads integration and sync data to see real performance trends here.</p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={210}>
+                  <LineChart data={seriesData} margin={{ left: -20, right: 4 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1A1E2E" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fill: '#8892A8', fontSize: 11 }} tickLine={false} axisLine={false} />
+                    <YAxis yAxisId="left"  tick={{ fill: '#8892A8', fontSize: 11 }} tickLine={false} axisLine={false} />
+                    <YAxis yAxisId="right" orientation="right" tick={{ fill: '#8892A8', fontSize: 11 }} tickLine={false} axisLine={false} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Line yAxisId="left"  type="monotone" dataKey="spend" name="Spend" stroke="#3B82F6" strokeWidth={2} dot={false} />
+                    <Line yAxisId="right" type="monotone" dataKey="roas"  name="ROAS"  stroke="#10B981" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
             </div>
 
             {/* Clicks by campaign (bar) */}

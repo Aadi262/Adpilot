@@ -4,13 +4,16 @@ const adRepo = require('../repositories/adRepository');
 const campaignRepo = require('../repositories/campaignRepository');
 const { AppError } = require('../middleware/errorHandler');
 const gemini      = require('./ai/GeminiService');
+const groq        = require('./ai/GroqService');
+const cerebra     = require('./ai/CerebraService');
+const together    = require('./ai/TogetherAIService');
 const ollama      = require('./ai/OllamaService');
 const huggingface = require('./ai/HuggingFaceService');
 const anthropic   = require('./ai/AnthropicService');
 const { withTimeout } = require('../utils/timeout');
 
-// Per-provider timeouts — Ollama is local but can be slow on first token
-const TIMEOUT_MS = { ollama: 8000, gemini: 8000, huggingface: 10000, anthropic: 8000 };
+// Per-provider timeouts — Cerebras is fastest (custom silicon, ~20x GPU speed)
+const TIMEOUT_MS = { ollama: 8000, groq: 10000, cerebra: 8000, together: 12000, gemini: 8000, huggingface: 10000, anthropic: 8000 };
 
 async function getAdsByCampaign(campaignId, teamId) {
   // Verify campaign belongs to team
@@ -120,19 +123,37 @@ async function generateAdWithAI(campaignId, brief, teamId) {
     if (result) return result;
   }
 
-  // 2. Try Gemini (free tier)
+  // 2. Try Groq (free 14,400 req/day, Llama 3.3 70B for creative)
+  if (groq.isAvailable) {
+    const result = await tryProvider('groq', () => groq.generateAds(adParams));
+    if (result) return result;
+  }
+
+  // 3. Try Cerebras (free 1M tokens/day, ~20x faster than GPU — Llama 3.3 70B)
+  if (cerebra.isAvailable) {
+    const result = await tryProvider('cerebra', () => cerebra.generateAds(adParams));
+    if (result) return result;
+  }
+
+  // 4. Try Gemini (free tier)
   if (gemini.isAvailable) {
     const result = await tryProvider('gemini', () => gemini.generateAds(adParams));
     if (result) return result;
   }
 
-  // 3. Try HuggingFace (free, Mistral-7B)
+  // 5. Try Together AI (Qwen 2.5, DeepSeek V3, Llama 3.3 — $5 free credits)
+  if (together.isAvailable) {
+    const result = await tryProvider('together', () => together.generateAds(adParams));
+    if (result) return result;
+  }
+
+  // 6. Try HuggingFace (free, Mistral-7B)
   if (huggingface.isAvailable) {
     const result = await tryProvider('huggingface', () => huggingface.generateAds(adParams));
     if (result) return result;
   }
 
-  // 4. Try Anthropic Claude (paid fallback)
+  // 7. Try Anthropic Claude (paid fallback)
   if (anthropic.isAvailable) {
     const result = await tryProvider('anthropic', () => anthropic.generateAds(adParams));
     if (result) return result;

@@ -7,6 +7,33 @@ const AnalyticsAggregator = require('../../services/analytics/AnalyticsAggregato
 const logger              = require('../../config/logger');
 
 /**
+ * Write a CampaignMetricSnapshot row for today.
+ * Uses upsert so re-running the same sync on the same day merges rather than duplicates.
+ */
+async function writeSnapshot(campaignId, teamId, metrics, source) {
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0); // normalize to start of day UTC
+
+  const { spend, revenue, clicks, impressions, conversions, ctr, cpa, roas,
+          frequency, impressionShare, isLostBudget } = metrics;
+
+  await prisma.campaignMetricSnapshot.upsert({
+    where:  { campaignId_date: { campaignId, date: today } },
+    update: { spend, revenue, clicks, impressions, conversions, ctr, cpa, roas,
+              frequency: frequency ?? null,
+              impressionShare: impressionShare ?? null,
+              isLostBudget: isLostBudget ?? null,
+              source },
+    create: { campaignId, teamId, date: today, spend, revenue, clicks, impressions,
+              conversions, ctr, cpa, roas,
+              frequency: frequency ?? null,
+              impressionShare: impressionShare ?? null,
+              isLostBudget: isLostBudget ?? null,
+              source },
+  });
+}
+
+/**
  * Integration Sync Processor
  *
  * Job data: { teamId, provider, dateFrom?, dateTo? }
@@ -27,6 +54,30 @@ const logger              = require('../../config/logger');
  *   spend, clicks, impressions, conversions, roas, ctr — always merged at root level
  */
 module.exports = async function integrationSyncProcessor(job) {
+  // Sweep mode: find all active integrations and enqueue individual sync jobs
+  if (job.data._sweep) {
+    const { queues } = require('../index');
+    const integrations = await prisma.integration.findMany({
+      where:  { status: 'active' },
+      select: { teamId: true, provider: true },
+    });
+
+    let enqueued = 0;
+    for (const { teamId, provider } of integrations) {
+      if (provider === 'slack') continue; // Slack has no performance data
+      await queues.integrationSync.add({ teamId, provider }, {
+        attempts:         2,
+        backoff:          { type: 'exponential', delay: 30_000 },
+        removeOnComplete: 10,
+        removeOnFail:     20,
+      });
+      enqueued++;
+    }
+
+    logger.info('Integration sync sweep: enqueued jobs', { total: integrations.length, enqueued });
+    return { swept: true, enqueued };
+  }
+
   const { teamId, provider, dateFrom, dateTo } = job.data;
 
   // Default date range: last 7 days
@@ -73,8 +124,12 @@ module.exports = async function integrationSyncProcessor(job) {
   }
 
   // ── 3. Match and persist ─────────────────────────────────────────────────
-  let synced    = 0;
-  let unmatched = 0;
+  let synced       = 0;
+  let unmatched    = 0;
+  let snapshots    = 0;
+  let totalSpend   = 0;
+  let totalClicks  = 0;
+  let roasValues   = [];
 
   for (const platformRecord of platformCampaigns) {
     try {
@@ -99,55 +154,64 @@ module.exports = async function integrationSyncProcessor(job) {
 
       // Derive calculated metrics
       const spend       = Number(platformRecord.spend)       || 0;
-      const revenue     = Number(existing.revenue)           || 0; // revenue not from sync
+      const revenue     = Number(existing.revenue)           || 0; // revenue not from ad platform sync
       const clicks      = Number(platformRecord.clicks)      || 0;
       const impressions = Number(platformRecord.impressions) || 0;
       const conversions = Number(platformRecord.conversions) || 0;
+      const ctr         = MetricsCalculator.ctr(clicks, impressions);
+      const cpa         = MetricsCalculator.cpa(spend, conversions);
+      const roas        = MetricsCalculator.roas(revenue, spend);
+
+      // Platform-specific signals
+      const frequency       = Number(platformRecord.frequency)       || null;
+      const impressionShare = Number(platformRecord.impressionShare) || null;
+      const isLostBudget    = Number(platformRecord.isLostBudget)    || null;
 
       const merged = {
         ...existing,
-        // Raw platform metrics
-        spend,
-        clicks,
-        impressions,
-        conversions,
-        ctr: MetricsCalculator.ctr(clicks, impressions),
-        cpa: MetricsCalculator.cpa(spend, conversions),
-        // roas requires revenue — keep existing unless platform provides it
-        roas: existing.roas || 0,
-        // Store external identifiers for rule engine + future syncs
-        [externalIdKey(provider)]:     String(platformRecord.externalId),
-        // Google: store budget resource name so updateBudget can use it
+        spend, clicks, impressions, conversions, ctr, cpa, roas,
+        ...(frequency       !== null ? { frequency }       : {}),
+        ...(impressionShare !== null ? { impressionShare } : {}),
+        ...(isLostBudget    !== null ? { isLostBudget }    : {}),
+        [externalIdKey(provider)]: String(platformRecord.externalId),
         ...(platformRecord.budgetResourceName
           ? { [budgetResourceKey(provider)]: platformRecord.budgetResourceName }
           : {}),
-        // Google: store accountId for context
         ...(platformRecord.customerId
           ? { [`${provider}_account_id`]: platformRecord.customerId }
           : {}),
         lastSyncedAt: new Date().toISOString(),
       };
 
+      // Persist performance JSON on campaign
       await prisma.campaign.update({
         where: { id: matched.id },
         data:  { performance: merged },
       });
 
-      // Keep index current so later iterations in this batch can find by external ID
+      // Write daily CampaignMetricSnapshot — this is what powers real analytics charts
+      await writeSnapshot(matched.id, teamId, {
+        spend, revenue, clicks, impressions, conversions, ctr, cpa, roas,
+        frequency, impressionShare, isLostBudget,
+      }, provider);
+      snapshots++;
+
+      // Accumulate totals for sync result summary
+      totalSpend  += spend;
+      totalClicks += clicks;
+      if (roas > 0) roasValues.push(roas);
+
+      // Keep index current for later iterations
       byExternalId.set(String(platformRecord.externalId), { ...matched, performance: merged });
 
       synced++;
-      logger.debug('Integration sync: campaign updated', {
+      logger.debug('Integration sync: campaign updated + snapshot written', {
         campaignId:  matched.id,
         name:        matched.name,
         externalId:  platformRecord.externalId,
-        spend,
-        clicks,
-        impressions,
-        conversions,
+        spend, clicks, impressions, conversions,
       });
     } catch (err) {
-      // Partial failure — log and continue with next campaign
       logger.error('Integration sync: failed to persist campaign', {
         provider,
         externalId: platformRecord.externalId,
@@ -164,11 +228,23 @@ module.exports = async function integrationSyncProcessor(job) {
     logger.warn('Integration sync: cache invalidation failed (non-fatal)', { error: err.message });
   }
 
-  logger.info('Integration sync completed', {
-    teamId, provider, total: platformCampaigns.length, synced, unmatched,
-  });
+  const avgRoas = roasValues.length
+    ? parseFloat((roasValues.reduce((s, v) => s + v, 0) / roasValues.length).toFixed(2))
+    : null;
 
-  return { total: platformCampaigns.length, synced, unmatched };
+  const result = {
+    total:      platformCampaigns.length,
+    synced,
+    unmatched,
+    snapshots,
+    totalSpend: parseFloat(totalSpend.toFixed(2)),
+    totalClicks,
+    avgRoas,
+    syncedAt:   new Date().toISOString(),
+  };
+
+  logger.info('Integration sync completed', { teamId, provider, ...result });
+  return result;
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

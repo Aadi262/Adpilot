@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import {
   Zap, Sparkles, Copy, CheckCircle, Trash2,
   ChevronRight, AlertCircle, Plus, LayoutGrid,
@@ -521,11 +522,31 @@ function AdVariationCard({ ad, isBest, onCopy, onSave, savePending, platform = '
 function GenerateTab() {
   const toast = useToast();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [form, setForm] = useState({
     keyword: '', platform: 'meta', goal: 'conversions',
     targetAudience: '', productName: '', campaignId: '',
   });
-  const [result, setResult] = useState(null);
+  const [result, setResult]       = useState(null);
+  const [fromRadar, setFromRadar] = useState(null); // { keyword, competitor } when pre-filled
+
+  // Pre-fill from Radar's "Counter in Forge" deep link: /ads?keyword=X&competitor=Y&brief=Z
+  useEffect(() => {
+    const kw         = searchParams.get('keyword');
+    const competitor = searchParams.get('competitor');
+    const brief      = searchParams.get('brief');
+    if (kw || competitor || brief) {
+      setForm((f) => ({
+        ...f,
+        keyword:        kw || f.keyword,
+        targetAudience: competitor ? `Customers of ${competitor}` : f.targetAudience,
+        productName:    brief ? brief.slice(0, 60) : f.productName,
+      }));
+      setFromRadar({ keyword: kw, competitor });
+      // Clear params from URL after reading so back-nav is clean
+      setSearchParams({}, { replace: true });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data: campaigns } = useQuery({
     queryKey: ['campaigns'],
@@ -551,13 +572,18 @@ function GenerateTab() {
   });
 
   const saveMutation = useMutation({
-    mutationFn: (ad) => api.post(
-      form.campaignId ? `/campaigns/${form.campaignId}/ads` : `/campaigns/${(campaigns?.[0])?.id}/ads`,
-      { headline: ad.headline, primaryText: ad.body || ad.primaryText, callToAction: ad.cta || ad.callToAction,
-        platform: form.platform, status: 'draft' }
-    ),
+    mutationFn: (ad) => {
+      if (!form.campaignId) {
+        return Promise.reject(new Error('No campaign selected'));
+      }
+      return api.post(
+        `/campaigns/${form.campaignId}/ads`,
+        { headline: ad.headline, primaryText: ad.body || ad.primaryText, callToAction: ad.cta || ad.callToAction,
+          platform: form.platform, status: 'draft' }
+      );
+    },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['ads'] }); toast.success('Ad saved to campaign'); },
-    onError: () => toast.error('Save failed — select a campaign first'),
+    onError: (err) => toast.error(err?.message === 'No campaign selected' ? 'Select a campaign before saving' : 'Save failed — try again'),
   });
 
   const variations = result?.variations ?? [];
@@ -569,6 +595,18 @@ function GenerateTab() {
 
   return (
     <div className="space-y-5">
+      {/* Radar deep-link banner */}
+      {fromRadar && (
+        <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-accent-purple/8 border border-accent-purple/20">
+          <p className="text-xs text-text-secondary">
+            <span className="text-accent-purple font-semibold">From Radar</span>
+            {fromRadar.competitor && <> · Competitor: <span className="text-text-primary">{fromRadar.competitor}</span></>}
+            {fromRadar.keyword && <> · Keyword pre-filled: <span className="text-text-primary">"{fromRadar.keyword}"</span></>}
+          </p>
+          <button onClick={() => setFromRadar(null)} className="text-text-secondary hover:text-text-primary text-xs">✕</button>
+        </div>
+      )}
+
       {/* Form */}
       <div className="card space-y-4">
         <div>

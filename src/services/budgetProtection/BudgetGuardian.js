@@ -27,6 +27,11 @@ class BudgetGuardian {
       },
     });
 
+    // Load ALL active rules for the team once — avoids N+1 query inside campaign loop
+    const allRules = await prisma.campaignAlert.findMany({
+      where: { teamId, isActive: true },
+    });
+
     const alerts = [];
     let totalSpend = 0;
     let totalBudget = 0;
@@ -60,17 +65,10 @@ class BudgetGuardian {
       // Skip campaigns with no meaningful spend
       if (spend < DEFAULTS.minSpend) continue;
 
-      // Check active alert rules for this team + campaign
-      const rules = await prisma.campaignAlert.findMany({
-        where: {
-          teamId,
-          isActive: true,
-          OR: [
-            { campaignId: campaign.id },
-            { campaignId: null }, // global rules
-          ],
-        },
-      });
+      // Filter pre-loaded rules for this campaign (campaign-specific or global)
+      const rules = allRules.filter(
+        (r) => r.campaignId === campaign.id || r.campaignId === null
+      );
 
       // Evaluate each rule against real data
       for (const rule of rules) {
@@ -106,13 +104,13 @@ class BudgetGuardian {
     const blendedCpa = totalConversions > 0 ? Number((totalSpend / totalConversions).toFixed(2)) : null;
     const blendedRoas = totalSpend > 0 ? Number((totalRevenue / totalSpend).toFixed(2)) : null;
     const anomalies = campaignSummaries
-      .filter((c) => (c.ctr !== null && c.ctr < 2) || (c.spend > c.budget && c.budget > 0))
+      .filter((c) => (c.ctr !== null && c.ctr < 0.5) || (c.spend > c.budget && c.budget > 0))
       .map((c) => ({
         campaignId: c.id,
         campaignName: c.name,
-        message: c.ctr !== null && c.ctr < 2
-          ? `CTR dropped below 2% on ${c.name}`
-          : `Spend exceeded budget on ${c.name}`,
+        message: c.ctr !== null && c.ctr < 0.5
+          ? `CTR critically low (${c.ctr?.toFixed(2)}%) on ${c.name} — creative may need refresh`
+          : `Spend exceeded daily budget on ${c.name}`,
       }))
       .slice(0, 5);
 
@@ -124,7 +122,11 @@ class BudgetGuardian {
       summary: {
         dailySpend: totalSpend,
         dailyBudget: totalBudget,
-        weeklySpend: Number((totalSpend * 7).toFixed(2)),
+        // Run-rate projections: today's spend × days (not real forecasts)
+        weeklyRunRate:  Number((totalSpend * 7).toFixed(2)),
+        monthlyRunRate: Number((totalSpend * 30).toFixed(2)),
+        // Keep legacy keys for backward compat with export report
+        weeklySpend:  Number((totalSpend * 7).toFixed(2)),
         monthlySpend: Number((totalSpend * 30).toFixed(2)),
         spendVelocity,
         blendedCpa,

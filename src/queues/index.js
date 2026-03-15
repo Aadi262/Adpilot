@@ -111,7 +111,19 @@ async function scheduleRecurringJobs() {
     }
   );
 
-  logger.info('Recurring jobs scheduled: token-health-check (daily 02:00 UTC), seo-monitor sweep (every 4h)');
+  // Integration performance sync — runs every 6 hours for all connected teams
+  // Enqueues one job per connected integration so each team/provider syncs independently
+  await queues.integrationSync.add(
+    { _sweep: true }, // sweep mode: processor queries all active integrations
+    {
+      repeat:           { cron: '0 */6 * * *', tz: 'UTC' },
+      jobId:            'integration-sync-sweep',
+      removeOnComplete: 1,
+      removeOnFail:     5,
+    }
+  );
+
+  logger.info('Recurring jobs scheduled: token-health-check (daily 02:00 UTC), seo-monitor sweep (every 4h), integration-sync sweep (every 6h)');
 }
 
 module.exports = { queues, registerProcessors, scheduleRecurringJobs };

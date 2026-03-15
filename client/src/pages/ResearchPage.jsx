@@ -175,18 +175,31 @@ function CompetitorSection() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {gapRows.slice(0, 10).map((g, i) => (
-                  <tr key={i} className="hover:bg-bg-secondary/20">
-                    <td className="px-5 py-2.5 text-text-primary font-medium">{g.keyword}</td>
-                    <td className="px-5 py-2.5 text-green-400">#{g.competitorRank ?? g.competitor_rank ?? '—'}</td>
-                    <td className="px-5 py-2.5 text-text-secondary">#{g.ourRank ?? g.our_rank ?? '—'}</td>
-                    <td className="px-5 py-2.5">
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-accent-purple/10 text-accent-purple">
-                        High
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {gapRows.slice(0, 15).map((g, i) => {
+                  const theirRank = g.competitorRank ?? g.competitor_rank ?? null;
+                  const ourRank   = g.ourRank ?? g.our_rank ?? null;
+                  const gap       = (ourRank && theirRank) ? ourRank - theirRank : null;
+                  // Score opportunity by rank gap size
+                  const { tier, cls } = gap === null
+                    ? { tier: 'Unknown', cls: 'bg-border/30 text-text-secondary' }
+                    : gap > 30
+                    ? { tier: 'Critical', cls: 'bg-red-500/10 text-red-400' }
+                    : gap > 15
+                    ? { tier: 'High',     cls: 'bg-accent-purple/10 text-accent-purple' }
+                    : gap > 5
+                    ? { tier: 'Medium',   cls: 'bg-amber-500/10 text-amber-400' }
+                    : { tier: 'Low',      cls: 'bg-accent-blue/10 text-accent-blue' };
+                  return (
+                    <tr key={i} className="hover:bg-bg-secondary/20">
+                      <td className="px-5 py-2.5 text-text-primary font-medium">{g.keyword}</td>
+                      <td className="px-5 py-2.5 text-green-400">{theirRank ? `#${theirRank}` : '—'}</td>
+                      <td className="px-5 py-2.5 text-text-secondary">{ourRank ? `#${ourRank}` : 'Not ranking'}</td>
+                      <td className="px-5 py-2.5">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cls}`}>{tier}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -1098,7 +1111,9 @@ function AdIntelSection() {
 }
 
 // ─── Keyword Research section ─────────────────────────────────────────────────
-function Sparkline({ data, width = 180, height = 44 }) {
+function Sparkline({ data, width = 180, height = 44, id = 'sg' }) {
+  // Each sparkline must use a unique gradient ID — clashing IDs cause wrong fill colors
+  const gradId = `sg-${id}`;
   if (!data || data.length < 2) return <div style={{ width, height, background: 'rgba(255,255,255,0.04)', borderRadius: 6 }} />;
   const max = Math.max(...data.map(d => d.score || 0), 1);
   const pts = data.map((d, i) => {
@@ -1110,12 +1125,12 @@ function Sparkline({ data, width = 180, height = 44 }) {
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: 'block' }}>
       <defs>
-        <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.35" />
           <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0" />
         </linearGradient>
       </defs>
-      <polygon points={polyPts} fill="url(#sg)" />
+      <polygon points={polyPts} fill={`url(#${gradId})`} />
       <polyline points={pts.join(' ')} fill="none" stroke="#8b5cf6" strokeWidth="2" strokeLinejoin="round" />
     </svg>
   );
@@ -1218,7 +1233,7 @@ function KeywordResearchSection() {
                 </div>
               </div>
               <div style={{ flexShrink: 0 }}>
-                <Sparkline data={kwResult.trendHistory || []} width={160} height={48} />
+                <Sparkline data={kwResult.trendHistory || []} width={160} height={48} id={searchTerm} />
                 <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', textAlign: 'center', marginTop: 4 }}>90-day trend</div>
               </div>
             </div>

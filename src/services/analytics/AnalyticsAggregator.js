@@ -134,8 +134,47 @@ class AnalyticsAggregator {
   }
 
   /**
+   * Get daily time-series for a team.
+   * Reads from CampaignMetricSnapshot, aggregated by date.
+   * Falls back to empty array if no snapshots exist yet.
+   */
+  async getTimeSeries(teamId, range = '30d') {
+    const days = range === '7d' ? 7 : range === '90d' ? 90 : 30;
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+
+    const snapshots = await prisma.campaignMetricSnapshot.findMany({
+      where: { teamId, date: { gte: since } },
+      orderBy: { date: 'asc' },
+      select: { date: true, spend: true, revenue: true, roas: true, clicks: true, conversions: true },
+    });
+
+    // Aggregate all campaigns into daily buckets
+    const byDate = {};
+    for (const s of snapshots) {
+      const key = s.date.toISOString().slice(0, 10);
+      if (!byDate[key]) byDate[key] = { label: key, spend: 0, revenue: 0, clicks: 0, conversions: 0, _roasSum: 0, _roasCount: 0 };
+      byDate[key].spend       += s.spend;
+      byDate[key].revenue     += s.revenue;
+      byDate[key].clicks      += s.clicks;
+      byDate[key].conversions += s.conversions;
+      if (s.roas > 0) { byDate[key]._roasSum += s.roas; byDate[key]._roasCount++; }
+    }
+
+    return Object.values(byDate).map((d) => ({
+      label:       d.label,
+      spend:       parseFloat(d.spend.toFixed(2)),
+      revenue:     parseFloat(d.revenue.toFixed(2)),
+      roas:        d._roasCount ? parseFloat((d._roasSum / d._roasCount).toFixed(2)) : 0,
+      clicks:      d.clicks,
+      conversions: d.conversions,
+    }));
+  }
+
+  /**
    * Detect performance anomalies across active campaigns.
-   * Compares last 7-day averages against 30-day baseline (using seeded perf data).
+   * Uses last 14 CampaignMetricSnapshot rows as the real baseline.
+   * Falls back gracefully if no snapshot data exists.
    */
   async detectAnomalies(teamId) {
     const campaigns = await prisma.campaign.findMany({
@@ -143,16 +182,42 @@ class AnalyticsAggregator {
       select: { id: true, name: true, performance: true },
     });
 
+    // Fetch last 14 snapshots per campaign in one query
+    const allSnapshots = await prisma.campaignMetricSnapshot.findMany({
+      where: {
+        teamId,
+        campaignId: { in: campaigns.map((c) => c.id) },
+      },
+      orderBy: { date: 'desc' },
+      take: campaigns.length * 14,
+      select: { campaignId: true, roas: true, cpa: true, ctr: true },
+    });
+
+    // Group by campaignId
+    const snapshotsByCampaign = {};
+    for (const s of allSnapshots) {
+      if (!snapshotsByCampaign[s.campaignId]) snapshotsByCampaign[s.campaignId] = [];
+      snapshotsByCampaign[s.campaignId].push(s);
+    }
+
     const anomalies = [];
     for (const c of campaigns) {
-      const p = c.performance || {};
-      // Build simple single-point history from stored performance
-      // In production this would read from a time-series table
-      const history = {
-        roas: [2.5, 3.0, 2.8, 3.2, 2.9],   // mock 5-day baseline
-        cpa:  [12, 14, 11, 13, 12],
-        ctr:  [2.1, 2.4, 2.0, 2.3, 2.2],
-      };
+      const p         = c.performance || {};
+      const history14 = snapshotsByCampaign[c.id] || [];
+
+      // Need at least 3 data points for meaningful anomaly detection
+      let history;
+      if (history14.length >= 3) {
+        history = {
+          roas: history14.map((s) => s.roas).filter((v) => v > 0),
+          cpa:  history14.map((s) => s.cpa).filter((v) => v !== null && v > 0),
+          ctr:  history14.map((s) => s.ctr).filter((v) => v > 0),
+        };
+      } else {
+        // No real baseline — skip anomaly detection for this campaign
+        continue;
+      }
+
       const current = {
         roas: Number(p.roas) || 0,
         cpa:  MetricsCalculator.cpa(Number(p.spend) || 0, Number(p.conversions) || 1),
