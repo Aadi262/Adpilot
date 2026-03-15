@@ -21,6 +21,12 @@ function createQueue(name) {
     defaultJobOptions: DEFAULT_JOB_OPTIONS,
   });
 
+  // 'error' listener MUST be present — without it, Node throws unhandled EventEmitter
+  // errors as uncaughtException when Redis is unreachable, crashing the process.
+  queue.on('error', (err) => {
+    logger.error(`Queue [${name}] Redis error`, { error: err.message });
+  });
+
   queue.on('failed', (job, err) => {
     logger.error(`Queue [${name}] job failed`, { jobId: job.id, attempt: job.attemptsMade, error: err.message });
   });
