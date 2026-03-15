@@ -1,8 +1,16 @@
 'use strict';
 
-const env = require('../../../config/env');
+// Do NOT require config/env here — it validates ALL env vars (JWT, encryption, etc.)
+// and throws on startup if any are missing. Use process.env directly for the
+// optional keys this adapter needs.
 const logger = require('../../../config/logger');
 const { getRedis } = require('../../../config/redis');
+
+const env = {
+  get CLOUDFLARE_API_TOKEN()  { return process.env.CLOUDFLARE_API_TOKEN  || ''; },
+  get CLOUDFLARE_ACCOUNT_ID() { return process.env.CLOUDFLARE_ACCOUNT_ID || ''; },
+  get SIMILARWEB_API_KEY()    { return process.env.SIMILARWEB_API_KEY    || ''; },
+};
 
 const TTL_SECONDS = 60 * 30;
 
