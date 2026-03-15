@@ -30,6 +30,52 @@ This lets `.env` keep `localhost` URLs (for local `npm run dev`) while Docker us
 
 ---
 
+## Issue #5 — Railway: Bull queue Redis error → uncaughtException → crash
+
+**Symptom:**
+```
+Database ready after 1 attempt(s)
+Sentry DSN not set — error reporting disabled
+EmailService: RESEND_API_KEY not set — emails will be logged only
+Uncaught exception    ← app restarts in a loop, healthcheck never passes
+```
+
+**Root cause:**
+`src/queues/index.js` creates all Bull queues at module load time (top-level `const queues = {...}`). When Redis is unreachable or the connection fails, Bull emits an `'error'` event. Node.js requires at least one `'error'` listener on every EventEmitter — without one, it converts the event to a thrown exception, which becomes an `uncaughtException` and crashes the process.
+
+**Fix (applied `954a14c3`):**
+Add an `'error'` listener to every Bull queue in `createQueue()`:
+```js
+queue.on('error', (err) => {
+  logger.error(`Queue [${name}] Redis error`, { error: err.message });
+});
+```
+The app now logs the Redis error and keeps running. Background jobs degrade gracefully; the core API and healthcheck stay up.
+
+**Rule:** Every Bull queue MUST have an `'error'` listener. Never create a Bull queue without one. Add it immediately after `new Bull(...)`.
+
+---
+
+## Issue #6 — Railway: Docker build fully cached, code changes not picked up
+
+**Symptom:**
+All Dockerfile steps show `cached` in Railway build logs — including `COPY src ./src/`. New code changes never reach the running container.
+
+**Root cause:**
+Railway uses BuildKit inline cache. Sometimes its cache layer invalidation doesn't trigger even when source files change (timing or cache key issue).
+
+**Fix:**
+Add or update a comment in the Dockerfile stage that's before `COPY src`:
+```dockerfile
+# CACHE_BUST: 2026-03-15 — reason for bust
+FROM node:20-slim AS production
+```
+Changing any line before a `COPY` step invalidates all subsequent layers.
+
+**Rule:** If Railway deploys show all steps as cached after a code change, update the `CACHE_BUST` comment date in the Dockerfile.
+
+---
+
 ## Issue #2 — Railway: App crashes on startup ("Uncaught exception") after DB connects
 
 **Symptom:**
