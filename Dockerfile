@@ -25,7 +25,6 @@ COPY client/ ./
 RUN npm run build
 
 # ── Stage 2: Production backend ───────────────────────────────────────────────
-# CACHE_BUST: 2026-03-15b — resilient startup, queues non-fatal
 FROM node:20-slim AS production
 
 # Chrome OS-level dependencies required by Puppeteer / Lighthouse
@@ -80,6 +79,10 @@ RUN npm ci --omit=dev
 
 # Generate Prisma client (uses the CLI installed above)
 RUN node_modules/.bin/prisma generate
+
+# Cache-bust token — update this string to force Railway to re-copy src on next deploy
+# Format: YYYY-MM-DD-vN  (increment N each time you need to bust cache)
+RUN echo "src-cache-bust-2026-03-15-v1"
 
 # Copy backend source
 COPY src ./src/
