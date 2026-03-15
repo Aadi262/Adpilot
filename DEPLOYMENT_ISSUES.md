@@ -4,6 +4,17 @@ A living document. Every time a deployment breaks, add the root cause and fix he
 
 ---
 
+## The Golden Rules (learned the hard way)
+
+1. **Only DB and HTTP are fatal.** Everything else (Redis, queues, cron, pulse) must warn and continue. Never `process.exit(1)` on an optional service.
+2. **Every EventEmitter needs an `error` listener.** Bull queues, Redis clients, any stream — if it can emit `error`, add a listener or Node throws it as `uncaughtException`.
+3. **Env vars from Railway are always strings.** Never use `Joi.boolean()` alone — use `Joi.alternatives().try(Joi.boolean(), Joi.string())`. Never use `Joi.string().uri()` without `.allow('')` for optional services.
+4. **`localhost` doesn't work inside Docker.** DB and Redis use service hostnames (`postgres`, `redis`). Override in `docker-compose.yml` environment block, keep `.env` for local dev.
+5. **Railway caches aggressively.** If changes don't show up, update the `CACHE_BUST` comment in Dockerfile above the `FROM node:20-slim AS production` line.
+6. **The startup banner must always print.** `server.js` logs http/db/queues/cron/pulse status on every boot — check Railway/VPS deploy logs for this banner to instantly know what's healthy.
+
+---
+
 ## Issue #1 — Docker: App can't reach Postgres/Redis (localhost inside container)
 
 **Symptom:**
