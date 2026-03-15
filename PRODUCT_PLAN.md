@@ -278,7 +278,9 @@ All AI services (Groq, Cerebras, Together AI) route by task type:
 
 > An ad manager opens AdPilot every morning. Right now they see a generic dashboard. They need to know what changed overnight and what to act on.
 
-#### 2A. Dashboard Situation Report
+#### 2A. Dashboard Situation Report ✅ COMPLETE
+
+**Layout decision: Option A** — Situation Report IS the dashboard. It renders first above the Health Score Banner and KPI cards. Always visible (shows empty state when no data). Title changed from "Command Center" to "Situation Report — [date]".
 
 Replace generic dashboard with auto-generated daily briefing:
 

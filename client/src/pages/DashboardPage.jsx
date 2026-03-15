@@ -665,12 +665,22 @@ function SituationReportPanel({ report, loading }) {
     );
   }
 
-  if (!report) return null;
-
-  const { urgent = [], watch = [], winners = [], sentinelActions = [], hasRealData } = report;
+  const { urgent = [], watch = [], winners = [], sentinelActions = [], hasRealData } = report ?? {};
   const totalItems = urgent.length + watch.length + winners.length + sentinelActions.length;
 
-  if (!hasRealData && totalItems === 0) return null;
+  if (!report) {
+    return (
+      <div style={{
+        background: 'rgba(255,255,255,0.02)',
+        border: '1px solid rgba(255,255,255,0.06)',
+        borderRadius: 16, padding: '22px 24px',
+        textAlign: 'center',
+      }}>
+        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.3)', marginBottom: 4 }}>No situation report yet</div>
+        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.18)' }}>Refreshes at 5am daily once campaigns have metric data</div>
+      </div>
+    );
+  }
 
   const severityColor = (s) => s === 'critical' ? '#ef4444' : '#f59e0b';
 
@@ -907,10 +917,10 @@ export default function DashboardPage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 700, color: 'rgba(255,255,255,0.9)', margin: 0 }}>
-            Command Center
+            Situation Report
           </h1>
           <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>
-            Real-time overview of your entire ad operation
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} · What changed overnight, what to act on
           </p>
         </div>
         <button
@@ -929,7 +939,10 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      {/* ── Zone 1: Health Score Banner ───────────────────────────────────────── */}
+      {/* ── Zone 1: Situation Report (Morning Briefing) ───────────────────────── */}
+      <SituationReportPanel report={situationData} loading={situationLoading} />
+
+      {/* ── Zone 2: Health Score Banner ───────────────────────────────────────── */}
       <div style={{
         background: 'rgba(255,255,255,0.025)',
         border: `1px solid ${healthColor}30`,
@@ -1033,11 +1046,6 @@ export default function DashboardPage() {
           loading={metricsLoading}
         />
       </div>
-
-      {/* ── Zone 2b: Morning Briefing (Situation Report) ──────────────────────── */}
-      {(situationLoading || (situationData && (situationData.hasRealData || situationData.totalItems > 0))) && (
-        <SituationReportPanel report={situationData} loading={situationLoading} />
-      )}
 
       {/* ── Zone 3: AI Recommendations + Activity ─────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
