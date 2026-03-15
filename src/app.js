@@ -65,7 +65,8 @@ app.use(cors({
       'http://localhost:5173',
       'http://localhost:3000',
       'http://0.0.0.0:3000',
-      'http://194.163.146.149:3001'
+      'http://194.163.146.140:3001',  // Contabo VPS
+      'http://194.163.146.140',        // Contabo VPS (no port)
     ];
     const envOrigins = process.env.ALLOWED_ORIGINS
       ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
