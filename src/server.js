@@ -4,163 +4,149 @@ const config = require('./config');
 const logger = require('./config/logger');
 const prisma = require('./config/prisma');
 const app = require('./app');
-const { registerProcessors, scheduleRecurringJobs } = require('./queues');
 
 let server;
 
 const PORT = config.port || process.env.PORT || 3000;
-const ENV = config.nodeEnv || process.env.NODE_ENV || 'development';
+const ENV  = config.nodeEnv || process.env.NODE_ENV || 'development';
 
-// ─── Unhandled rejection / exception safety net ───────────────────────────
+// ─── Safety net — log the actual error before exiting ─────────────────────
+// This catches anything that slips past our try/catch blocks and prints a
+// clear message rather than a silent crash. Keep this as early as possible.
 process.on('uncaughtException', (err) => {
-  logger.error('UNCAUGHT EXCEPTION — process will exit', {
+  logger.error('UNCAUGHT EXCEPTION — shutting down', {
+    name:    err.name,
     message: err.message,
-    stack: err.stack,
-    name: err.name,
+    stack:   err.stack,
   });
   process.exit(1);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-  logger.error('UNHANDLED PROMISE REJECTION', {
+process.on('unhandledRejection', (reason) => {
+  logger.error('UNHANDLED PROMISE REJECTION — keeping process alive', {
     reason: reason instanceof Error
-      ? { message: reason.message, stack: reason.stack, name: reason.name }
-      : reason,
-    promise: String(promise),
+      ? { name: reason.name, message: reason.message, stack: reason.stack }
+      : String(reason),
   });
-  // Don't exit — log it and keep running, but flag it clearly
+  // Don't exit — log and keep running.
 });
 
 // ─── Startup ──────────────────────────────────────────────────────────────
 async function start() {
-  logger.info('Starting AdPilot API...', { port: PORT, env: ENV });
+  const status = { http: false, db: false, queues: false, jobs: false, pulse: false };
 
-  // 1. HTTP server FIRST — Railway/Render healthchecks hit /health within 30s.
-  //    Binding before DB/Redis ensures the liveness endpoint responds immediately
-  //    even while infrastructure connections are still being established.
+  // ── 1. HTTP server — FATAL if fails ──────────────────────────────────────
+  // Start first so Railway's /health check responds immediately, even while
+  // DB and Redis are still connecting.
   try {
     await new Promise((resolve, reject) => {
-      server = app.listen(PORT, '0.0.0.0', () => {
-        logger.info('Server started ✓', { port: PORT, env: ENV });
-        console.log(
-          `\n🚀 AdPilot API running on http://0.0.0.0:${PORT} [${ENV}]\n` +
-          `   Health:    http://localhost:${PORT}/health\n` +
-          `   Auth:      http://localhost:${PORT}/api/v1/auth/login\n` +
-          `   Campaigns: http://localhost:${PORT}/api/v1/campaigns\n`
-        );
-        resolve();
-      });
-
-      server.on('error', (err) => {
-        if (err.code === 'EADDRINUSE') {
-          logger.error(`HTTP SERVER ERROR — Port ${PORT} is already in use`, {
-            code: err.code,
-            port: PORT,
-            hint: `Run: lsof -ti tcp:${PORT} | xargs kill -9`,
-          });
-        } else {
-          logger.error('HTTP SERVER ERROR', {
-            message: err.message,
-            code: err.code,
-            stack: err.stack,
-          });
-        }
-        reject(err);
-      });
+      server = app.listen(PORT, '0.0.0.0', () => resolve());
+      server.on('error', reject);
     });
+    status.http = true;
+    logger.info('HTTP server started ✓', { port: PORT, env: ENV });
   } catch (err) {
-    logger.error('FAILED TO START HTTP SERVER', {
+    logger.error('FATAL — HTTP server failed to start', {
       message: err.message,
-      stack: err.stack,
+      code:    err.code,
+      hint:    err.code === 'EADDRINUSE' ? `Port ${PORT} is already in use` : undefined,
     });
     process.exit(1);
   }
 
-  // 2. Database — connect after HTTP is already accepting requests
+  // ── 2. Database — FATAL if fails ─────────────────────────────────────────
+  // Core API cannot function without a DB.
   try {
-    logger.info('Connecting to PostgreSQL...');
     await prisma.$connect();
+    status.db = true;
     logger.info('Database connected ✓');
   } catch (err) {
-    logger.error('DATABASE CONNECTION FAILED', {
+    logger.error('FATAL — Database connection failed', {
       message: err.message,
-      code: err.code,
-      meta: err.meta,
-      stack: err.stack,
-      hint: 'Check DATABASE_URL in .env and make sure the DB is reachable',
+      hint:    'Check DATABASE_URL — must use service hostname in Docker (not localhost)',
     });
     process.exit(1);
   }
 
-  // 3. Bull queue processors
+  // ── 3. Bull queue processors — NON-FATAL ─────────────────────────────────
+  // Redis being down should not take the whole app down. Background jobs
+  // will not process, but the API and UI stay functional.
   try {
-    logger.info('Registering Bull queue processors...');
+    const { registerProcessors } = require('./queues');
     registerProcessors();
+    status.queues = true;
     logger.info('Queue processors registered ✓');
   } catch (err) {
-    logger.error('QUEUE PROCESSOR REGISTRATION FAILED', {
+    logger.warn('Queue processors failed to register — background jobs disabled', {
       message: err.message,
-      stack: err.stack,
-      hint: 'Check Redis connection — REDIS_URL in .env',
+      hint:    'Check REDIS_URL — queues are non-fatal, API continues running',
     });
-    process.exit(1);
   }
 
-  // 4. Recurring jobs
-  try {
-    logger.info('Scheduling recurring jobs...');
-    await scheduleRecurringJobs();
-    logger.info('Recurring jobs scheduled ✓');
-  } catch (err) {
-    logger.error('RECURRING JOB SCHEDULING FAILED', {
-      message: err.message,
-      stack: err.stack,
-      hint: 'Redis may be unavailable or a job definition is broken',
-    });
-    process.exit(1);
+  // ── 4. Recurring jobs — NON-FATAL ────────────────────────────────────────
+  if (status.queues) {
+    try {
+      const { scheduleRecurringJobs } = require('./queues');
+      await scheduleRecurringJobs();
+      status.jobs = true;
+      logger.info('Recurring jobs scheduled ✓');
+    } catch (err) {
+      logger.warn('Recurring job scheduling failed — cron jobs disabled', {
+        message: err.message,
+      });
+    }
   }
 
-  // 5. Pulse cron (every 15 min — non-fatal if fails)
+  // ── 5. Pulse cron — NON-FATAL ────────────────────────────────────────────
   try {
     require('./services/pulse/PulseService').startCron();
+    status.pulse = true;
   } catch (err) {
-    logger.warn('PulseService cron start failed (non-fatal)', { message: err.message });
+    logger.warn('PulseService cron failed to start (non-fatal)', { message: err.message });
   }
+
+  // ── Startup banner — always printed so Railway/VPS logs show exact state ─
+  const tick = (ok) => ok ? '✓' : '✗ (degraded)';
+  logger.info('=== AdPilot startup complete ===', {
+    http:       tick(status.http),
+    database:   tick(status.db),
+    queues:     tick(status.queues),
+    cronJobs:   tick(status.jobs),
+    pulse:      tick(status.pulse),
+    port:       PORT,
+    env:        ENV,
+    node:       process.version,
+  });
+
+  console.log(
+    `\n  AdPilot API  [${ENV}]  port ${PORT}\n` +
+    `  http   ${status.http   ? '✓' : '✗'}\n` +
+    `  db     ${status.db     ? '✓' : '✗'}\n` +
+    `  queues ${status.queues ? '✓' : '✗ (Redis unavailable — background jobs disabled)'}\n` +
+    `  pulse  ${status.pulse  ? '✓' : '✗'}\n`
+  );
 }
 
 // ─── Graceful shutdown ────────────────────────────────────────────────────
 async function shutdown(signal) {
-  logger.info(`${signal} received — shutting down gracefully...`);
+  logger.info(`${signal} received — shutting down gracefully`);
 
-  const TIMEOUT = 10_000; // 10s hard kill
   const killer = setTimeout(() => {
-    logger.error('Shutdown timed out after 10s — forcing exit');
+    logger.error('Shutdown timed out — forcing exit');
     process.exit(1);
-  }, TIMEOUT);
+  }, 10_000);
 
   try {
     if (server) {
-      await new Promise((resolve, reject) => {
-        server.close((err) => {
-          if (err) reject(err);
-          else resolve();
-        });
-      });
+      await new Promise((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
       logger.info('HTTP server closed ✓');
     }
-
     await prisma.$disconnect();
     logger.info('Database disconnected ✓');
-
     clearTimeout(killer);
-    logger.info('Shutdown complete');
     process.exit(0);
-
   } catch (err) {
-    logger.error('ERROR DURING SHUTDOWN', {
-      message: err.message,
-      stack: err.stack,
-    });
+    logger.error('Error during shutdown', { message: err.message });
     clearTimeout(killer);
     process.exit(1);
   }

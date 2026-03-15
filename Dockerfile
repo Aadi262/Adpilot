@@ -25,7 +25,7 @@ COPY client/ ./
 RUN npm run build
 
 # ── Stage 2: Production backend ───────────────────────────────────────────────
-# CACHE_BUST: 2026-03-15 — force Railway to re-run COPY src after Bull error fix
+# CACHE_BUST: 2026-03-15b — resilient startup, queues non-fatal
 FROM node:20-slim AS production
 
 # Chrome OS-level dependencies required by Puppeteer / Lighthouse
