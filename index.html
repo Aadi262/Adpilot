@@ -77,11 +77,11 @@
       letter-spacing: -0.02em;
     }
     .nav-logo-mark {
-      width: 32px; height: 32px; border-radius: 9px;
-      overflow: hidden;
+      width: 40px; height: 40px;
       display: flex; align-items: center; justify-content: center;
+      transition: transform 0.3s, filter 0.3s;
     }
-    .nav-logo-mark img { width: 32px; height: 32px; object-fit: contain; display: block; }
+    .nav-logo-mark img { width: 40px; height: 40px; object-fit: contain; mix-blend-mode: screen; display: block; }
     .nav-links { display: flex; gap: 8px; align-items: center; }
     .nav-links a {
       color: var(--text-secondary); text-decoration: none; font-size: 14px;
@@ -1159,7 +1159,7 @@
   }
   .nav-logo:hover .nav-logo-mark {
     transform: rotate(-8deg) scale(1.05);
-    box-shadow: 0 0 16px rgba(59,130,246,0.3);
+    filter: drop-shadow(0 0 8px rgba(59,130,246,0.5));
   }
 
   /* ===== HERO CTA BUTTON PULSE ===== */

@@ -120,7 +120,7 @@ export default function Sidebar({ open, onClose }) {
         <div className="flex items-center justify-between px-5 md:px-2 lg:px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2.5 md:justify-center lg:justify-start w-full">
             {/* Real AdPilot logo — icon only on collapsed md, full wordmark on lg */}
-            <AdpilotLogo variant="icon" size={32} className="md:block" />
+            <AdpilotLogo variant="icon" size={36} className="md:block" />
             <div className="hidden lg:block">
               <span className="font-bold text-sm text-text-primary tracking-tight leading-none">
                 Ad<span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">Pilot</span>

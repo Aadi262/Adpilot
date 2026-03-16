@@ -13,8 +13,8 @@ export default function AdpilotLogo({ variant = 'icon', size = 32, className = '
       alt="AdPilot"
       width={size}
       height={size}
-      className="shrink-0 rounded-lg"
-      style={{ objectFit: 'contain' }}
+      className="shrink-0"
+      style={{ objectFit: 'contain', mixBlendMode: 'screen' }}
     />
   );
 
