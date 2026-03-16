@@ -5,8 +5,8 @@ export default defineConfig({
   plugins: [react()],
   base: '/',
   server: {
-    port: 5173,
-    strictPort: true, // Fail fast if 5173 is taken — never silently drift to another port
+    port: 5174,
+    strictPort: true, // Fail fast if 5174 is taken — never silently drift to another port
     proxy: {
       '/api': {
         target: 'http://localhost:3000',
