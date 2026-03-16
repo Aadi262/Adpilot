@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
-import { Zap, Eye, EyeOff, CheckCircle, AlertCircle, Loader } from 'lucide-react';
+import { Eye, EyeOff, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 import api from '../lib/api';
 import useAuthStore from '../store/authStore';
+import AdpilotLogo from '../components/ui/AdpilotLogo';
 
 export default function AcceptInvitePage() {
   const [searchParams] = useSearchParams();
@@ -74,11 +75,8 @@ export default function AcceptInvitePage() {
 
       <div className="w-full max-w-md relative">
         {/* Logo */}
-        <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent-blue to-accent-purple flex items-center justify-center">
-            <Zap className="w-5 h-5 text-white" />
-          </div>
-          <span className="text-2xl font-bold text-text-primary">AdPilot</span>
+        <div className="flex items-center justify-center mb-8">
+          <AdpilotLogo variant="wordmark" size={40} />
         </div>
 
         <div className="card">

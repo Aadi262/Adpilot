@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import api from '../lib/api';
 import useAuthStore from '../store/authStore';
+import AdpilotLogo from '../components/ui/AdpilotLogo';
 import './LoginPage.css';
 
 export default function LoginPage() {
@@ -138,13 +139,7 @@ export default function LoginPage() {
         {/* ── LEFT PANEL ── */}
         <div className="left-panel">
           <div className="brand">
-            <div className="brand-icon">
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                <path d="M10 2L17.32 6.5V15.5L10 20L2.68 15.5V6.5L10 2Z" fill="white" opacity="0.9"/>
-                <path d="M10 7L13.46 9V13L10 15L6.54 13V9L10 7Z" fill="none" stroke="white" strokeWidth="1.2" opacity="0.6"/>
-              </svg>
-            </div>
-            <span className="brand-name">Ad<span>Pilot</span></span>
+            <AdpilotLogo variant="wordmark" size={36} />
           </div>
 
           <div className="left-content">

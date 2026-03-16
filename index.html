@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AdPilot — AI-Powered Ad & SEO Command Center</title>
+  <link rel="icon" type="image/png" href="Adpilot Logo/Abstract logo with airplane accent.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -77,10 +78,10 @@
     }
     .nav-logo-mark {
       width: 32px; height: 32px; border-radius: 9px;
-      background: var(--gradient-hero);
+      overflow: hidden;
       display: flex; align-items: center; justify-content: center;
     }
-    .nav-logo-mark svg { width: 18px; height: 18px; }
+    .nav-logo-mark img { width: 32px; height: 32px; object-fit: contain; display: block; }
     .nav-links { display: flex; gap: 8px; align-items: center; }
     .nav-links a {
       color: var(--text-secondary); text-decoration: none; font-size: 14px;
@@ -593,7 +594,7 @@
   <div class="nav-inner">
     <a href="#" class="nav-logo">
       <div class="nav-logo-mark">
-        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        <img src="Adpilot Logo/Abstract logo with airplane accent.png" alt="AdPilot" />
       </div>
       AdPilot
     </a>

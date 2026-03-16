@@ -7,6 +7,7 @@ import {
   LogOut, X,
 } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
+import AdpilotLogo from '../ui/AdpilotLogo';
 
 // ─── Nav structure with Phase K feature identity ────────────────────────────
 const NAV_GROUPS = [
@@ -118,16 +119,12 @@ export default function Sidebar({ open, onClose }) {
         {/* ── Logo ──────────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between px-5 md:px-2 lg:px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2.5 md:justify-center lg:justify-start w-full">
-            {/* A/P airplane logo */}
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600
-                            flex items-center justify-center shrink-0">
-              <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4 text-white" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M22 2L11 13" />
-                <path d="M22 2L15 22L11 13L2 9L22 2Z" />
-              </svg>
-            </div>
+            {/* Real AdPilot logo — icon only on collapsed md, full wordmark on lg */}
+            <AdpilotLogo variant="icon" size={32} className="md:block" />
             <div className="hidden lg:block">
-              <span className="font-bold text-sm text-text-primary tracking-tight leading-none">AdPilot</span>
+              <span className="font-bold text-sm text-text-primary tracking-tight leading-none">
+                Ad<span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">Pilot</span>
+              </span>
               <span className="block text-[10px] text-text-secondary leading-none mt-0.5">AI Command Center</span>
             </div>
           </div>

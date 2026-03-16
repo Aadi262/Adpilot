@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Zap, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 import api from '../lib/api';
 import useAuthStore from '../store/authStore';
+import AdpilotLogo from '../components/ui/AdpilotLogo';
 
 export default function RegisterPage() {
   const navigate  = useNavigate();
@@ -34,11 +35,8 @@ export default function RegisterPage() {
       </div>
 
       <div className="w-full max-w-md relative">
-        <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent-blue to-accent-purple flex items-center justify-center">
-            <Zap className="w-5 h-5 text-white" />
-          </div>
-          <span className="text-2xl font-bold text-text-primary">AdPilot</span>
+        <div className="flex items-center justify-center mb-8">
+          <AdpilotLogo variant="wordmark" size={40} />
         </div>
 
         <div className="card">

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, Fragment } from 'react';
 import { Link } from 'react-router-dom';
+import logoUrl from '../assets/adpilot-logo.png';
 import './LandingPage.css';
 
 /* ── Pipeline agent data ── */
@@ -421,7 +422,7 @@ export default function LandingPage() {
         <div className="nav-inner">
           <a href="/" className="nav-logo">
             <div className="nav-logo-mark">
-              <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+              <img src={logoUrl} alt="AdPilot" style={{ width: 32, height: 32, objectFit: 'contain' }} />
             </div>
             AdPilot
           </a>
@@ -808,8 +809,8 @@ export default function LandingPage() {
             {/* Left panel */}
             <div className="cal-left">
               <div className="cal-brand">
-                <div className="nav-logo-mark" style={{ width: 36, height: 36, borderRadius: 9, background: 'linear-gradient(135deg,#3B82F6,#8B5CF6)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" style={{ width: 18, height: 18 }}><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                <div style={{ width: 36, height: 36, borderRadius: 9, overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <img src={logoUrl} alt="AdPilot" style={{ width: 36, height: 36, objectFit: 'contain' }} />
                 </div>
                 <div>
                   <div style={{ fontWeight: 700, color: 'white', fontSize: 15 }}>AdPilot</div>
@@ -898,7 +899,9 @@ export default function LandingPage() {
           <div className="footer-grid">
             <div className="footer-about">
               <a href="/" className="nav-logo">
-                <div className="nav-logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
+                <div className="nav-logo-mark">
+                  <img src={logoUrl} alt="AdPilot" style={{ width: 32, height: 32, objectFit: 'contain' }} />
+                </div>
                 AdPilot
               </a>
               <p>AI-powered ad and SEO automation for teams who refuse to waste money on manual marketing.</p>
