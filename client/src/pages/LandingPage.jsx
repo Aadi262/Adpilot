@@ -809,8 +809,8 @@ export default function LandingPage() {
             {/* Left panel */}
             <div className="cal-left">
               <div className="cal-brand">
-                <div style={{ width: 36, height: 36, borderRadius: 9, overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <img src={logoUrl} alt="AdPilot" style={{ width: 36, height: 36, objectFit: 'contain' }} />
+                <div style={{ width: 36, height: 36, borderRadius: 9, overflow: 'hidden', flexShrink: 0 }}>
+                  <img src={logoUrl} alt="AdPilot" style={{ width: 36, height: 36, objectFit: 'cover', display: 'block' }} />
                 </div>
                 <div>
                   <div style={{ fontWeight: 700, color: 'white', fontSize: 15 }}>AdPilot</div>
