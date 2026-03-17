@@ -4,6 +4,7 @@ const express = require('express');
 const { authenticate, requireRole } = require('../middleware/auth');
 const validateZod = require('../middleware/validateZod');
 const { createCampaignSchema, updateCampaignSchema } = require('../validators/schemas/campaignSchema');
+const { campaignStartLimiter } = require('../middleware/rateLimiter');
 const prisma = require('../config/prisma');
 const {
   list,
@@ -27,7 +28,7 @@ router.get('/:id', getOne);
 router.post('/',           requireRole('admin', 'manager'), validateZod(createCampaignSchema), create);
 router.patch('/:id',       requireRole('admin', 'manager'), validateZod(updateCampaignSchema), update);
 router.delete('/:id',      requireRole('admin', 'manager'), remove);
-router.post('/:id/launch', requireRole('admin', 'manager'), launch);
+router.post('/:id/launch', campaignStartLimiter, requireRole('admin', 'manager'), launch);
 router.post('/:id/pause',  requireRole('admin', 'manager'), pause);
 
 /**

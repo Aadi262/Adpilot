@@ -11,23 +11,33 @@ const handler = (req, res) => {
   });
 };
 
-/** General API limiter: 120 req / minute per IP */
+/** General API limiter: 100 req / 15 minutes per IP */
 const apiLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 120,
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   standardHeaders: true,
   legacyHeaders: false,
   handler,
 });
 
-/** Auth endpoints: 10 attempts / 15 minutes per IP (brute-force protection) */
+/** Auth endpoints: 5 attempts / 15 minutes per IP (brute-force protection) */
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler,
+  skipSuccessfulRequests: true, // only count failed attempts toward limit
+});
+
+/** Campaign launch: 10 per hour per user (prevents runaway launches) */
+const campaignStartLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
   handler,
-  skipSuccessfulRequests: true, // only count failed requests toward limit
+  keyGenerator: (req) => req.user?.id || req.ip,
 });
 
 /** Heavy compute endpoints: 20 req / minute */
@@ -39,4 +49,4 @@ const heavyLimiter = rateLimit({
   handler,
 });
 
-module.exports = { apiLimiter, authLimiter, heavyLimiter };
+module.exports = { apiLimiter, authLimiter, campaignStartLimiter, heavyLimiter };
