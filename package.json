@@ -28,7 +28,7 @@
     "google-trends-api": "^4.9.2",
     "groq-sdk": "^0.37.0",
     "helmet": "^7.0.0",
-    "ioredis": "^5.0.0",
+    "ioredis": "^5.10.1",
     "joi": "^17.0.0",
     "jsonwebtoken": "^9.0.0",
     "lighthouse": "^13.0.3",
